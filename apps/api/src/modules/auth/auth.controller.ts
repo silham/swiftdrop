@@ -60,8 +60,16 @@ export class AuthController {
   @Get('google')
   @ApiOperation({ summary: 'Redirect to Google sign-in' })
   async google(@Res() res: Response) {
-    const { url } = await this.auth.googleAuthUrl();
-    // TODO(M2): set state + code_verifier cookies (httpOnly, 10 min, path=/api/v1/auth/google)
+    const { url, state, codeVerifier } = await this.auth.googleAuthUrl();
+    const cookieOpts = {
+      httpOnly: true,
+      secure: this.tokens.cookieOptions(0).secure,
+      sameSite: 'lax' as const,
+      path: '/api/v1/auth/google',
+      maxAge: 10 * 60 * 1000,
+    };
+    res.cookie('sd_oauth_state', state, cookieOpts);
+    res.cookie('sd_oauth_verifier', codeVerifier, cookieOpts);
     res.redirect(url);
   }
 
@@ -80,6 +88,8 @@ export class AuthController {
       req.cookies?.['sd_oauth_verifier'],
       meta(req),
     );
+    res.clearCookie('sd_oauth_state', { path: '/api/v1/auth/google' });
+    res.clearCookie('sd_oauth_verifier', { path: '/api/v1/auth/google' });
     this.startSession(res, session);
     res.redirect(session.home);
   }

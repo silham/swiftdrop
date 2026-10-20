@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Card, NotImplemented } from '@/components/ui';
+import { Card } from '@/components/ui';
+import { RegisterForm } from '@/features/auth';
 
 export const metadata = { title: 'Create account' };
 
@@ -12,7 +13,7 @@ export default function RegisterPage() {
       </Link>
       <Card className="mt-6 space-y-4">
         <h1 className="text-xl font-semibold">Create your account</h1>
-        <NotImplemented owner="M2" doc="docs/members/M02-auth-users.md" />
+        <RegisterForm />
       </Card>
     </main>
   );
