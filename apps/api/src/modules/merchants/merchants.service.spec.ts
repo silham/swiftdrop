@@ -73,6 +73,7 @@ describe('MerchantsService', () => {
 
     users = {
       createUser: jest.fn(),
+      createUserInTransaction: jest.fn(),
     };
 
     audit = {
@@ -97,13 +98,14 @@ describe('MerchantsService', () => {
         contactPhone: ' +94771234567 ',
       };
 
-      it('creates a user and a pending merchant', async () => {
-        users.createUser.mockResolvedValue({ id: 'user_456' });
+      it('creates a user and a pending merchant in one transaction', async () => {
+        users.createUserInTransaction.mockResolvedValue({ id: 'user_456' });
         prisma.merchant.create.mockResolvedValue(mockMerchantRecord);
 
         const res = await service.register(registerDto);
 
-        expect(users.createUser).toHaveBeenCalledWith({
+        expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+        expect(users.createUserInTransaction).toHaveBeenCalledWith(prisma, {
           email: 'Merchant@Test.com',
           name: 'John Doe',
           role: 'MERCHANT',
@@ -122,15 +124,26 @@ describe('MerchantsService', () => {
         });
 
         expect(res.status).toBe('PENDING');
+        expect(users.createUser).not.toHaveBeenCalled();
+        expect(prisma.user.delete).not.toHaveBeenCalled();
       });
 
-      it('rolls back created user if merchant creation fails', async () => {
-        users.createUser.mockResolvedValue({ id: 'user_456' });
+      it('rejects the transaction if merchant creation fails', async () => {
+        users.createUserInTransaction.mockResolvedValue({ id: 'user_456' });
         prisma.merchant.create.mockRejectedValue(new Error('DB failure'));
-        prisma.user.delete.mockResolvedValue({ id: 'user_456' });
 
         await expect(service.register(registerDto)).rejects.toThrow('DB failure');
-        expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user_456' } });
+
+        expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+        expect(users.createUserInTransaction).toHaveBeenCalledWith(
+          prisma,
+          expect.objectContaining({
+            email: 'Merchant@Test.com',
+            role: 'MERCHANT',
+          }),
+        );
+        expect(prisma.merchant.create).toHaveBeenCalledTimes(1);
+        expect(prisma.user.delete).not.toHaveBeenCalled();
       });
     });
 

@@ -4,7 +4,7 @@ import { ERROR_CODES, type Paginated } from '@swiftdrop/contracts';
 import type { ApiKey, Merchant, MerchantStatus, Prisma, WebhookEndpoint } from '@swiftdrop/db';
 import type { AuthUser } from '../../common/auth';
 import { AppError, notFound } from '../../common/errors/app-error';
-import { paginated } from '../../common/pagination/pagination';
+import { PaginationQuery, paginated } from '../../common/pagination/pagination';
 import { InjectConfig } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { PrismaService } from '../../infra/prisma';
@@ -85,12 +85,12 @@ export class MerchantsService {
     try {
       parsed = new URL(urlStr);
     } catch {
-      throw new AppError(ERROR_CODES.BAD_REQUEST, 'Invalid webhook URL', HttpStatus.BAD_REQUEST);
+      throw new AppError(ERROR_CODES.VALIDATION_FAILED, 'Invalid webhook URL', HttpStatus.BAD_REQUEST);
     }
 
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       throw new AppError(
-        ERROR_CODES.BAD_REQUEST,
+        ERROR_CODES.VALIDATION_FAILED,
         'Webhook URL must use HTTP or HTTPS protocol',
         HttpStatus.BAD_REQUEST,
       );
@@ -98,15 +98,18 @@ export class MerchantsService {
 
     if (this.config.NODE_ENV === 'production' && parsed.protocol !== 'https:') {
       throw new AppError(
-        ERROR_CODES.BAD_REQUEST,
+        ERROR_CODES.VALIDATION_FAILED,
         'Webhook URL must use HTTPS in production',
         HttpStatus.BAD_REQUEST,
       );
     }
   }
 
-  async register(dto: RegisterMerchantDto): Promise<MerchantDto> {
-    const user = await this.users.createUser({
+  
+async register(dto: RegisterMerchantDto): Promise<MerchantDto> {
+  const merchant = await this.prisma.$transaction(async (tx) => {
+    // 1. Create the user within this transaction.
+    const user = await this.users.createUserInTransaction(tx, {
       email: dto.email,
       name: dto.contactName,
       role: 'MERCHANT',
@@ -114,23 +117,21 @@ export class MerchantsService {
       phone: dto.contactPhone,
     });
 
-    try {
-      const merchant = await this.prisma.merchant.create({
-        data: {
-          ownerUserId: user.id,
-          businessName: dto.businessName.trim(),
-          contactEmail: dto.email.toLowerCase().trim(),
-          contactPhone: dto.contactPhone?.trim() || null,
-          status: 'PENDING',
-        },
-      });
-      return this.toDto(merchant);
-    } catch (err) {
-      // Rollback user creation if merchant record creation fails
-      await this.prisma.user.delete({ where: { id: user.id } }).catch(() => {});
-      throw err;
-    }
-  }
+    // 2. Create the merchant profile in the SAME transaction.
+    return tx.merchant.create({
+      data: {
+        ownerUserId: user.id,
+        businessName: dto.businessName.trim(),
+        contactEmail: dto.email.toLowerCase().trim(),
+        contactPhone: dto.contactPhone?.trim() || null,
+        status: 'PENDING',
+      },
+    });
+  });
+
+  return this.toDto(merchant);
+}
+
 
   async getMine(user: AuthUser): Promise<MerchantDto> {
     const merchant = await this.getMerchantForUser(user.id);

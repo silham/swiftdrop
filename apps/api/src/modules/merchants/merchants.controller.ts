@@ -14,6 +14,7 @@ import {
   WebhookDto,
   WebhookWithSecretDto,
 } from './dto/merchant.dto';
+import { PaginationQuery } from '../../common/pagination/pagination';
 import { MerchantsService } from './merchants.service';
 
 /** Owner: M5 — merchant PORTAL (cookie session). Partner API lives in merchant-api (X-Api-Key). */
@@ -84,6 +85,7 @@ export class MerchantsController {
   }
 
   @Post('me/webhooks/:id/rotate-secret')
+  @HttpCode(200)
   @ApiOkResponse({ type: WebhookWithSecretDto })
   rotate(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.merchants.rotateWebhookSecret(user, id);
