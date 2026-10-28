@@ -36,6 +36,45 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Message/consumer counts of a queue (passive declare), or null if it does not exist or the
+   * broker is unreachable. Each call opens its own short-lived channel: a passive declare of a
+   * missing queue makes the broker close that channel, and that must not disturb the SSE
+   * subscriber channel or the next lookup.
+   */
+  async queueDepth(queue: string): Promise<{ messages: number; consumers: number } | null> {
+    const conn = this.connection?.connection;
+    if (!conn) return null;
+    let ch: Channel | undefined;
+    try {
+      ch = await conn.createChannel();
+      // The broker closing the channel (missing queue) is emitted as 'error'; it is expected here.
+      ch.on('error', () => undefined);
+      const q = await ch.checkQueue(queue);
+      return { messages: q.messageCount, consumers: q.consumerCount };
+    } catch {
+      return null;
+    } finally {
+      await ch?.close().catch(() => undefined);
+    }
+  }
+
+  /**
+   * Publish straight to a work queue (default exchange), with broker confirm (the channel wrapper
+   * uses a confirm channel). Callers must check the queue exists first: the default exchange
+   * silently drops messages for a missing queue. Only for operator re-queues (e.g. re-delivering one
+   * webhook); domain events always go through OutboxService.
+   */
+  async publishToQueue(queue: string, body: unknown, headers: Record<string, string> = {}) {
+    await this.channel!.sendToQueue(queue, Buffer.from(JSON.stringify(body)), {
+      persistent: true,
+      contentType: 'application/json',
+      headers,
+      // Fail instead of hanging the request if the broker drops mid-publish.
+      timeout: 10_000,
+    });
+  }
+
+  /**
    * Bind an exclusive, auto-delete queue to `swiftdrop.events` and consume it.
    * Suitable for per-instance fan-out (SSE). Not for work queues — those live in the worker.
    */
