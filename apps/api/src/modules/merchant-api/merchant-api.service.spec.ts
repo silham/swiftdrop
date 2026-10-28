@@ -146,7 +146,7 @@ describe('MerchantApiService', () => {
       const res = await service.getParcel(mockMerchantId, 'SD100000001');
 
       expect(res.trackingNumber).toBe('SD100000001');
-      expect(res.recipientCity).toBeUndefined(); // private/detailed view
+      expect(res).not.toHaveProperty('recipientCity');
     });
 
     it('throws 404 when parcel does not exist', async () => {

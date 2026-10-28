@@ -13,7 +13,6 @@ describe('Partner API Engine (/api/v1/merchant/*) — Task Group 3 (integration)
 
   // Merchant B (Another approved merchant for cross-merchant tests)
   let merchantBId: string;
-  let rawKeyB: string;
 
   // Merchant C (Pending merchant)
   let rawKeyPending: string;
@@ -77,7 +76,7 @@ describe('Partner API Engine (/api/v1/merchant/*) — Task Group 3 (integration)
       },
     });
     merchantBId = merchantB.id;
-    rawKeyB = await generateKeyRecord(merchantBId, 'Merchant B Valid Key');
+    await generateKeyRecord(merchantBId, 'Merchant B Valid Key');
 
     // 3. Create Merchant C (Pending)
     const userPending = await t.prisma.user.create({
