@@ -13,6 +13,12 @@ interface ApiKeyItem {
   createdAt: string;
 }
 
+async function fetchKeys(signal?: AbortSignal): Promise<ApiKeyItem[]> {
+  const res = await fetch('/api/v1/merchants/me/api-keys', { signal });
+  if (!res.ok) throw await res.json();
+  return (await res.json()) as ApiKeyItem[];
+}
+
 export function ApiKeysManager() {
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,12 +33,30 @@ export function ApiKeysManager() {
   const [createdRawKey, setCreatedRawKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadInitialKeys() {
+      try {
+        const data = await fetchKeys(controller.signal);
+        if (!controller.signal.aborted) setKeys(data);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(errorMessage(err, 'Failed to load API keys'));
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+
+    void loadInitialKeys();
+    return () => controller.abort();
+  }, []);
+
   async function loadKeys() {
     try {
       setLoading(true);
-      const res = await fetch('/api/v1/merchants/me/api-keys');
-      if (!res.ok) throw await res.json();
-      const data = await res.json();
+      const data = await fetchKeys();
       setKeys(data);
     } catch (err) {
       setError(errorMessage(err, 'Failed to load API keys'));
@@ -40,10 +64,6 @@ export function ApiKeysManager() {
       setLoading(false);
     }
   }
-
-  useEffect(() => {
-    loadKeys();
-  }, []);
 
   async function handleCreateKey(e: React.FormEvent) {
     e.preventDefault();
@@ -59,9 +79,10 @@ export function ApiKeysManager() {
       });
 
       if (!res.ok) throw await res.json();
-      const created = await res.json();
+      const created = (await res.json()) as { key: string };
 
       setCreatedRawKey(created.key);
+      setCopied(false);
       setKeyName('');
       setIsCreating(false);
       await loadKeys();
@@ -78,6 +99,7 @@ export function ApiKeysManager() {
     }
 
     try {
+      setError(null);
       const res = await fetch(`/api/v1/merchants/me/api-keys/${id}`, {
         method: 'DELETE',
       });
@@ -88,10 +110,14 @@ export function ApiKeysManager() {
     }
   }
 
-  function copyToClipboard(text: string) {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setError('Could not copy the key automatically. Select and copy it manually.');
+    }
   }
 
   const columns: Column<ApiKeyItem>[] = [
@@ -169,7 +195,10 @@ export function ApiKeysManager() {
               </p>
             </div>
             <button
-              onClick={() => setCreatedRawKey(null)}
+              onClick={() => {
+                setCreatedRawKey(null);
+                setCopied(false);
+              }}
               className="text-xs text-muted hover:text-ink font-medium"
             >
               Dismiss ✕
@@ -185,7 +214,7 @@ export function ApiKeysManager() {
             />
             <Button
               variant="primary"
-              onClick={() => copyToClipboard(createdRawKey)}
+              onClick={() => void copyToClipboard(createdRawKey)}
               className="whitespace-nowrap"
             >
               {copied ? '✓ Copied!' : 'Copy Key'}
@@ -243,23 +272,26 @@ export function ApiKeysManager() {
       )}
 
       {/* Keys Table */}
-      <Table
-        columns={columns}
-        rows={keys}
-        rowKey={(k) => k.id}
-        empty={
-          <EmptyState
-            title="No API Keys"
-            description="You haven't generated any partner API keys yet."
-            action={
-              <Button variant="primary" onClick={() => setIsCreating(true)}>
-                Generate Your First Key
-              </Button>
-            }
-          />
-        }
-      />
+      {loading ? (
+        <p role="status" className="text-sm text-muted">Loading API keys...</p>
+      ) : (
+        <Table
+          columns={columns}
+          rows={keys}
+          rowKey={(k) => k.id}
+          empty={
+            <EmptyState
+              title="No API Keys"
+              description="You haven't generated any partner API keys yet."
+              action={
+                <Button variant="primary" onClick={() => setIsCreating(true)}>
+                  Generate Your First Key
+                </Button>
+              }
+            />
+          }
+        />
+      )}
     </div>
   );
 }
-

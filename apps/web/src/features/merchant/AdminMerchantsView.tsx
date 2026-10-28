@@ -23,6 +23,17 @@ const STATUS_FILTERS = [
   { value: 'SUSPENDED', label: 'Suspended' },
 ];
 
+async function fetchMerchants(status: string, signal?: AbortSignal): Promise<MerchantRecord[]> {
+  const params = new URLSearchParams({ pageSize: '50' });
+  if (status) params.set('status', status);
+
+  const response = await fetch(`/api/v1/admin/merchants?${params.toString()}`, { signal });
+  if (!response.ok) throw await response.json();
+
+  const body: { data?: MerchantRecord[] } = await response.json();
+  return body.data ?? [];
+}
+
 export function AdminMerchantsView() {
   const [merchants, setMerchants] = useState<MerchantRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,17 +48,13 @@ export function AdminMerchantsView() {
   const [rejectReason, setRejectReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Used after approve/reject/suspend actions to refresh the current filter.
   async function loadMerchants() {
+    setLoading(true);
     try {
-      setLoading(true);
-      const params = new URLSearchParams({ pageSize: '50' });
-      if (selectedStatus) {
-        params.set('status', selectedStatus);
-      }
-      const res = await fetch(`/api/v1/admin/merchants?${params.toString()}`);
-      if (!res.ok) throw await res.json();
-      const body = await res.json();
-      setMerchants(body.data ?? []);
+      const data = await fetchMerchants(selectedStatus);
+      setMerchants(data);
+      setError(null);
     } catch (err) {
       setError(errorMessage(err, 'Failed to load merchants'));
     } finally {
@@ -56,7 +63,25 @@ export function AdminMerchantsView() {
   }
 
   useEffect(() => {
-    loadMerchants();
+    const controller = new AbortController();
+
+    // Asynchronous completion updates state; no synchronous state writes in the effect.
+    void fetchMerchants(selectedStatus, controller.signal)
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        setMerchants(data);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (!controller.signal.aborted) {
+          setError(errorMessage(err, 'Failed to load merchants'));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
   }, [selectedStatus]);
 
   async function handleApprove(id: string, name: string) {
@@ -291,7 +316,10 @@ export function AdminMerchantsView() {
         <div className="flex items-center gap-2">
           <Select
             value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
+            onChange={(e) => {
+              setLoading(true);
+              setSelectedStatus(e.target.value);
+            }}
           >
             {STATUS_FILTERS.map((f) => (
               <option key={f.value} value={f.value}>
@@ -303,6 +331,7 @@ export function AdminMerchantsView() {
       </div>
 
       {/* Merchants Table */}
+      {loading && <p className="text-sm text-muted" role="status">Loading merchants...</p>}
       <Table
         columns={columns}
         rows={filtered}

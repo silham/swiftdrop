@@ -60,7 +60,31 @@ export function WebhooksManager() {
   }
 
   useEffect(() => {
-    loadEndpoints();
+    const controller = new AbortController();
+
+    async function fetchInitialEndpoints() {
+      try {
+        const res = await fetch('/api/v1/merchants/me/webhooks', {
+          signal: controller.signal,
+        });
+        if (!res.ok) throw await res.json();
+        const data: WebhookItem[] = await res.json();
+        if (!controller.signal.aborted) {
+          setEndpoints(data);
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(errorMessage(err, 'Failed to load webhook endpoints'));
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void fetchInitialEndpoints();
+    return () => controller.abort();
   }, []);
 
   async function handleCreateEndpoint(e: React.FormEvent) {
@@ -344,7 +368,12 @@ export function WebhooksManager() {
       )}
 
       {/* Endpoints Table */}
-      <Table
+      {loading && (
+        <p role="status" className="py-4 text-center text-sm text-muted">
+          Loading webhook endpoints...
+        </p>
+      )}
+      {!loading && <Table
         columns={columns}
         rows={endpoints}
         rowKey={(e) => e.id}
@@ -359,7 +388,7 @@ export function WebhooksManager() {
             }
           />
         }
-      />
+      />}
 
       {/* Delivery Attempts Modal/Drawer */}
       {selectedEndpoint && (
