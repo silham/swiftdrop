@@ -109,18 +109,21 @@ export class MerchantsAdminController {
 
   @Post(':id/approve')
   @HttpCode(200)
+  @ApiOkResponse({ type: MerchantDto })
   approve(@CurrentUser() admin: AuthUser, @Param('id') id: string) {
     return this.merchants.approve(admin, id);
   }
 
   @Post(':id/reject')
   @HttpCode(200)
+  @ApiOkResponse({ type: MerchantDto })
   reject(@CurrentUser() admin: AuthUser, @Param('id') id: string, @Body() dto: RejectMerchantDto) {
     return this.merchants.reject(admin, id, dto.reason);
   }
 
   @Post(':id/suspend')
   @HttpCode(200)
+  @ApiOkResponse({ type: MerchantDto })
   suspend(@CurrentUser() admin: AuthUser, @Param('id') id: string) {
     return this.merchants.suspend(admin, id);
   }

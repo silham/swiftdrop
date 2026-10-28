@@ -1,12 +1,17 @@
 import { Injectable } from '@nestjs/common';
+import type { Paginated } from '@swiftdrop/contracts';
+import type { Merchant, MerchantStatus, Prisma } from '@swiftdrop/db';
 import type { AuthUser } from '../../common/auth';
-import { notImplemented } from '../../common/errors/app-error';
+import { notFound, notImplemented } from '../../common/errors/app-error';
+import { paginated } from '../../common/pagination/pagination';
 import { PrismaService } from '../../infra/prisma';
+import { AuditService } from '../audit';
 import { UsersService } from '../users';
 import type {
   CreateApiKeyDto,
   CreateWebhookDto,
   ListMerchantsQuery,
+  MerchantDto,
   RegisterMerchantDto,
   UpdateWebhookDto,
 } from './dto/merchant.dto';
@@ -21,14 +26,55 @@ export class MerchantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly users: UsersService,
+    private readonly audit: AuditService,
   ) {}
 
-  async register(_dto: RegisterMerchantDto) {
-    notImplemented('M5'); // TODO(M5): users.createUser({ role: 'MERCHANT', ... }) + merchant PENDING in one tx
+  private toDto(merchant: Merchant): MerchantDto {
+    return {
+      id: merchant.id,
+      businessName: merchant.businessName,
+      contactEmail: merchant.contactEmail,
+      contactPhone: merchant.contactPhone ?? undefined,
+      status: merchant.status,
+      approvedAt: merchant.approvedAt ?? undefined,
+      approvedById: merchant.approvedById ?? undefined,
+      createdAt: merchant.createdAt,
+    };
   }
 
-  async getMine(_user: AuthUser) {
-    notImplemented('M5');
+  async register(dto: RegisterMerchantDto): Promise<MerchantDto> {
+    const user = await this.users.createUser({
+      email: dto.email,
+      name: dto.contactName,
+      role: 'MERCHANT',
+      password: dto.password,
+      phone: dto.contactPhone,
+    });
+
+    try {
+      const merchant = await this.prisma.merchant.create({
+        data: {
+          ownerUserId: user.id,
+          businessName: dto.businessName.trim(),
+          contactEmail: dto.email.toLowerCase().trim(),
+          contactPhone: dto.contactPhone?.trim() || null,
+          status: 'PENDING',
+        },
+      });
+      return this.toDto(merchant);
+    } catch (err) {
+      // Rollback user creation if merchant record creation fails
+      await this.prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+      throw err;
+    }
+  }
+
+  async getMine(user: AuthUser): Promise<MerchantDto> {
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { ownerUserId: user.id },
+    });
+    if (!merchant) throw notFound('Merchant');
+    return this.toDto(merchant);
   }
 
   /**
@@ -70,16 +116,108 @@ export class MerchantsService {
   }
 
   // admin
-  async adminList(_q: ListMerchantsQuery) {
-    notImplemented('M5');
+  async adminList(q: ListMerchantsQuery): Promise<Paginated<MerchantDto>> {
+    const where: Prisma.MerchantWhereInput = q.status
+      ? { status: q.status as MerchantStatus }
+      : {};
+
+    const [merchants, total] = await Promise.all([
+      this.prisma.merchant.findMany({
+        where,
+        skip: q.skip,
+        take: q.take,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.merchant.count({ where }),
+    ]);
+
+    return paginated(
+      merchants.map((m) => this.toDto(m)),
+      total,
+      q,
+    );
   }
-  async approve(_admin: AuthUser, _id: string) {
-    notImplemented('M5'); // TODO(M5): audit 'merchant.approved'
+
+  async approve(admin: AuthUser, id: string): Promise<MerchantDto> {
+    const merchant = await this.prisma.merchant.findUnique({ where: { id } });
+    if (!merchant) throw notFound('Merchant');
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const res = await tx.merchant.update({
+        where: { id },
+        data: {
+          status: 'APPROVED',
+          approvedAt: new Date(),
+          approvedById: admin.id,
+        },
+      });
+      await this.audit.record(
+        {
+          actor: { id: admin.id, role: admin.role },
+          action: 'merchant.approved',
+          entityType: 'Merchant',
+          entityId: id,
+          metadata: { previousStatus: merchant.status },
+        },
+        tx,
+      );
+      return res;
+    });
+
+    return this.toDto(updated);
   }
-  async reject(_admin: AuthUser, _id: string, _reason?: string) {
-    notImplemented('M5');
+
+  async reject(admin: AuthUser, id: string, reason?: string): Promise<MerchantDto> {
+    const merchant = await this.prisma.merchant.findUnique({ where: { id } });
+    if (!merchant) throw notFound('Merchant');
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const res = await tx.merchant.update({
+        where: { id },
+        data: {
+          status: 'REJECTED',
+        },
+      });
+      await this.audit.record(
+        {
+          actor: { id: admin.id, role: admin.role },
+          action: 'merchant.rejected',
+          entityType: 'Merchant',
+          entityId: id,
+          metadata: { reason: reason ?? null, previousStatus: merchant.status },
+        },
+        tx,
+      );
+      return res;
+    });
+
+    return this.toDto(updated);
   }
-  async suspend(_admin: AuthUser, _id: string) {
-    notImplemented('M5');
+
+  async suspend(admin: AuthUser, id: string): Promise<MerchantDto> {
+    const merchant = await this.prisma.merchant.findUnique({ where: { id } });
+    if (!merchant) throw notFound('Merchant');
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const res = await tx.merchant.update({
+        where: { id },
+        data: {
+          status: 'SUSPENDED',
+        },
+      });
+      await this.audit.record(
+        {
+          actor: { id: admin.id, role: admin.role },
+          action: 'merchant.suspended',
+          entityType: 'Merchant',
+          entityId: id,
+          metadata: { previousStatus: merchant.status },
+        },
+        tx,
+      );
+      return res;
+    });
+
+    return this.toDto(updated);
   }
 }

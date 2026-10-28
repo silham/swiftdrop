@@ -121,4 +121,11 @@ deliveries live. M8 may add a `webhook-echo` dev service.
 
 ## Status / notes
 
-_Update as you go._
+- **Task Group 1 Completed (Merchant Account & Admin Approval API)**:
+  - Implemented `POST /merchants/register` (creates user with role `MERCHANT` and merchant in `PENDING` status).
+  - Implemented `GET /merchants/me` (retrieves merchant profile and approval status for authenticated merchant).
+  - Implemented `GET /admin/merchants` (paginated list of merchants with optional status filter).
+  - Implemented `POST /admin/merchants/:id/approve` (sets status to `APPROVED`, records `approvedAt`, `approvedById`, and writes audit log via `AuditService`).
+  - Implemented `POST /admin/merchants/:id/reject` (sets status to `REJECTED`, records optional reason, and writes audit log).
+  - Implemented `POST /admin/merchants/:id/suspend` (sets status to `SUSPENDED` and writes audit log).
+  - Added unit tests (`merchants.service.spec.ts`) and integration tests (`apps/api/test/merchants/merchants.e2e-spec.ts`).

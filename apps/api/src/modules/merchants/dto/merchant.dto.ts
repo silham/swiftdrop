@@ -28,7 +28,10 @@ export class MerchantDto {
   @ApiProperty() id: string;
   @ApiProperty() businessName: string;
   @ApiProperty() contactEmail: string;
+  @ApiPropertyOptional({ nullable: true }) contactPhone?: string | null;
   @ApiProperty({ enum: MERCHANT_STATUSES }) status: string;
+  @ApiPropertyOptional({ nullable: true }) approvedAt?: Date | null;
+  @ApiPropertyOptional({ nullable: true }) approvedById?: string | null;
   @ApiProperty() createdAt: Date;
 }
 
