@@ -1,19 +1,27 @@
-import { Injectable } from '@nestjs/common';
-import type { Paginated } from '@swiftdrop/contracts';
-import type { Merchant, MerchantStatus, Prisma } from '@swiftdrop/db';
+import * as crypto from 'crypto';
+import { HttpStatus, Injectable } from '@nestjs/common';
+import { ERROR_CODES, type Paginated } from '@swiftdrop/contracts';
+import type { ApiKey, Merchant, MerchantStatus, Prisma, WebhookEndpoint } from '@swiftdrop/db';
 import type { AuthUser } from '../../common/auth';
-import { notFound, notImplemented } from '../../common/errors/app-error';
+import { AppError, notFound } from '../../common/errors/app-error';
 import { paginated } from '../../common/pagination/pagination';
+import { InjectConfig } from '../../config/config.module';
+import type { Env } from '../../config/env';
 import { PrismaService } from '../../infra/prisma';
 import { AuditService } from '../audit';
 import { UsersService } from '../users';
+import { encryptWebhookSecret } from './crypto';
 import type {
+  ApiKeyDto,
   CreateApiKeyDto,
+  CreatedApiKeyDto,
   CreateWebhookDto,
   ListMerchantsQuery,
   MerchantDto,
   RegisterMerchantDto,
   UpdateWebhookDto,
+  WebhookDto,
+  WebhookWithSecretDto,
 } from './dto/merchant.dto';
 
 /**
@@ -27,6 +35,7 @@ export class MerchantsService {
     private readonly prisma: PrismaService,
     private readonly users: UsersService,
     private readonly audit: AuditService,
+    @InjectConfig() private readonly config: Env,
   ) {}
 
   private toDto(merchant: Merchant): MerchantDto {
@@ -40,6 +49,60 @@ export class MerchantsService {
       approvedById: merchant.approvedById ?? undefined,
       createdAt: merchant.createdAt,
     };
+  }
+
+  private toApiKeyDto(key: ApiKey): ApiKeyDto {
+    return {
+      id: key.id,
+      name: key.name,
+      prefix: key.prefix,
+      lastUsedAt: key.lastUsedAt,
+      revokedAt: key.revokedAt,
+      createdAt: key.createdAt,
+    };
+  }
+
+  private toWebhookDto(ep: WebhookEndpoint): WebhookDto {
+    return {
+      id: ep.id,
+      url: ep.url,
+      eventTypes: ep.eventTypes,
+      isActive: ep.isActive,
+      createdAt: ep.createdAt,
+    };
+  }
+
+  private async getMerchantForUser(userId: string): Promise<Merchant> {
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { ownerUserId: userId },
+    });
+    if (!merchant) throw notFound('Merchant');
+    return merchant;
+  }
+
+  private validateWebhookUrl(urlStr: string): void {
+    let parsed: URL;
+    try {
+      parsed = new URL(urlStr);
+    } catch {
+      throw new AppError(ERROR_CODES.BAD_REQUEST, 'Invalid webhook URL', HttpStatus.BAD_REQUEST);
+    }
+
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      throw new AppError(
+        ERROR_CODES.BAD_REQUEST,
+        'Webhook URL must use HTTP or HTTPS protocol',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (this.config.NODE_ENV === 'production' && parsed.protocol !== 'https:') {
+      throw new AppError(
+        ERROR_CODES.BAD_REQUEST,
+        'Webhook URL must use HTTPS in production',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
   }
 
   async register(dto: RegisterMerchantDto): Promise<MerchantDto> {
@@ -70,10 +133,7 @@ export class MerchantsService {
   }
 
   async getMine(user: AuthUser): Promise<MerchantDto> {
-    const merchant = await this.prisma.merchant.findUnique({
-      where: { ownerUserId: user.id },
-    });
-    if (!merchant) throw notFound('Merchant');
+    const merchant = await this.getMerchantForUser(user.id);
     return this.toDto(merchant);
   }
 
@@ -82,37 +142,229 @@ export class MerchantsService {
    * constant-time compare SHA-256 hash, reject revoked keys / non-APPROVED merchants, touch lastUsedAt.
    * Returns the merchantId or null.
    */
-  async verifyApiKey(_rawKey: string): Promise<string | null> {
-    notImplemented('M5');
+  async verifyApiKey(rawKey: string): Promise<string | null> {
+    const match = rawKey.match(/^(sd_live_[a-zA-Z0-9]{8})_.+$/);
+    if (!match) return null;
+    const prefix = match[1];
+
+    const apiKey = await this.prisma.apiKey.findUnique({
+      where: { prefix },
+      include: { merchant: true },
+    });
+    if (!apiKey) return null;
+
+    const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
+    const hashBuffer = Buffer.from(keyHash, 'utf8');
+    const storedBuffer = Buffer.from(apiKey.keyHash, 'utf8');
+
+    if (
+      hashBuffer.length !== storedBuffer.length ||
+      !crypto.timingSafeEqual(hashBuffer, storedBuffer)
+    ) {
+      return null;
+    }
+
+    if (apiKey.revokedAt !== null) {
+      return null;
+    }
+
+    if (apiKey.merchant.status !== 'APPROVED') {
+      throw new AppError(
+        ERROR_CODES.MERCHANT_NOT_APPROVED,
+        'Merchant account is not approved',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    const now = new Date();
+    const ONE_MINUTE_MS = 60 * 1000;
+    if (!apiKey.lastUsedAt || now.getTime() - apiKey.lastUsedAt.getTime() > ONE_MINUTE_MS) {
+      await this.prisma.apiKey
+        .update({
+          where: { id: apiKey.id },
+          data: { lastUsedAt: now },
+        })
+        .catch(() => {});
+    }
+
+    return apiKey.merchantId;
   }
 
-  async listApiKeys(_user: AuthUser) {
-    notImplemented('M5');
-  }
-  async createApiKey(_user: AuthUser, _dto: CreateApiKeyDto) {
-    notImplemented('M5');
-  }
-  async revokeApiKey(_user: AuthUser, _id: string) {
-    notImplemented('M5');
+  async listApiKeys(user: AuthUser): Promise<ApiKeyDto[]> {
+    const merchant = await this.getMerchantForUser(user.id);
+    const keys = await this.prisma.apiKey.findMany({
+      where: { merchantId: merchant.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    return keys.map((k) => this.toApiKeyDto(k));
   }
 
-  async listWebhooks(_user: AuthUser) {
-    notImplemented('M5');
+  async createApiKey(user: AuthUser, dto: CreateApiKeyDto): Promise<CreatedApiKeyDto> {
+    const merchant = await this.getMerchantForUser(user.id);
+
+    const prefixPart = crypto.randomBytes(4).toString('hex');
+    const prefix = `sd_live_${prefixPart}`;
+    const secretPart = crypto.randomBytes(32).toString('base64url');
+    const rawKey = `${prefix}_${secretPart}`;
+    const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
+
+    const apiKey = await this.prisma.apiKey.create({
+      data: {
+        merchantId: merchant.id,
+        name: dto.name.trim(),
+        prefix,
+        keyHash,
+      },
+    });
+
+    await this.audit.record({
+      actor: { id: user.id, role: user.role },
+      action: 'api_key.created',
+      entityType: 'ApiKey',
+      entityId: apiKey.id,
+      metadata: { name: apiKey.name, prefix: apiKey.prefix },
+    });
+
+    return {
+      ...this.toApiKeyDto(apiKey),
+      key: rawKey,
+    };
   }
-  async createWebhook(_user: AuthUser, _dto: CreateWebhookDto) {
-    notImplemented('M5'); // TODO(M5): generate secret, encrypt with WEBHOOK_SECRET_ENC_KEY (AES-256-GCM)
+
+  async revokeApiKey(user: AuthUser, id: string): Promise<void> {
+    const merchant = await this.getMerchantForUser(user.id);
+    const key = await this.prisma.apiKey.findFirst({
+      where: { id, merchantId: merchant.id },
+    });
+    if (!key) throw notFound('ApiKey');
+
+    if (key.revokedAt) return;
+
+    await this.prisma.apiKey.update({
+      where: { id },
+      data: { revokedAt: new Date() },
+    });
+
+    await this.audit.record({
+      actor: { id: user.id, role: user.role },
+      action: 'api_key.revoked',
+      entityType: 'ApiKey',
+      entityId: id,
+      metadata: { prefix: key.prefix },
+    });
   }
-  async updateWebhook(_user: AuthUser, _id: string, _dto: UpdateWebhookDto) {
-    notImplemented('M5');
+
+  async listWebhooks(user: AuthUser): Promise<WebhookDto[]> {
+    const merchant = await this.getMerchantForUser(user.id);
+    const endpoints = await this.prisma.webhookEndpoint.findMany({
+      where: { merchantId: merchant.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    return endpoints.map((ep) => this.toWebhookDto(ep));
   }
-  async deleteWebhook(_user: AuthUser, _id: string) {
-    notImplemented('M5');
+
+  async createWebhook(user: AuthUser, dto: CreateWebhookDto): Promise<WebhookWithSecretDto> {
+    const merchant = await this.getMerchantForUser(user.id);
+
+    this.validateWebhookUrl(dto.url);
+
+    const rawSecret = crypto.randomBytes(32).toString('hex');
+    const secretEncrypted = encryptWebhookSecret(rawSecret, this.config.WEBHOOK_SECRET_ENC_KEY);
+
+    const endpoint = await this.prisma.webhookEndpoint.create({
+      data: {
+        merchantId: merchant.id,
+        url: dto.url.trim(),
+        secretEncrypted,
+        eventTypes:
+          dto.eventTypes && dto.eventTypes.length > 0
+            ? dto.eventTypes
+            : ['parcel.status_changed'],
+        isActive: true,
+      },
+    });
+
+    return {
+      ...this.toWebhookDto(endpoint),
+      secret: rawSecret,
+    };
   }
-  async rotateWebhookSecret(_user: AuthUser, _id: string) {
-    notImplemented('M5');
+
+  async updateWebhook(user: AuthUser, id: string, dto: UpdateWebhookDto): Promise<WebhookDto> {
+    const merchant = await this.getMerchantForUser(user.id);
+    const existing = await this.prisma.webhookEndpoint.findFirst({
+      where: { id, merchantId: merchant.id },
+    });
+    if (!existing) throw notFound('WebhookEndpoint');
+
+    if (dto.url) {
+      this.validateWebhookUrl(dto.url);
+    }
+
+    const updated = await this.prisma.webhookEndpoint.update({
+      where: { id },
+      data: {
+        url: dto.url?.trim() ?? undefined,
+        isActive: dto.isActive !== undefined ? dto.isActive : undefined,
+      },
+    });
+
+    return this.toWebhookDto(updated);
   }
-  async listWebhookAttempts(_user: AuthUser, _id: string) {
-    notImplemented('M5');
+
+  async deleteWebhook(user: AuthUser, id: string): Promise<void> {
+    const merchant = await this.getMerchantForUser(user.id);
+    const existing = await this.prisma.webhookEndpoint.findFirst({
+      where: { id, merchantId: merchant.id },
+    });
+    if (!existing) throw notFound('WebhookEndpoint');
+
+    await this.prisma.webhookEndpoint.delete({ where: { id } });
+  }
+
+  async rotateWebhookSecret(user: AuthUser, id: string): Promise<WebhookWithSecretDto> {
+    const merchant = await this.getMerchantForUser(user.id);
+    const existing = await this.prisma.webhookEndpoint.findFirst({
+      where: { id, merchantId: merchant.id },
+    });
+    if (!existing) throw notFound('WebhookEndpoint');
+
+    const newRawSecret = crypto.randomBytes(32).toString('hex');
+    const newEncrypted = encryptWebhookSecret(newRawSecret, this.config.WEBHOOK_SECRET_ENC_KEY);
+
+    const updated = await this.prisma.webhookEndpoint.update({
+      where: { id },
+      data: {
+        secretEncrypted: newEncrypted,
+        previousSecretEncrypted: existing.secretEncrypted,
+      },
+    });
+
+    await this.audit.record({
+      actor: { id: user.id, role: user.role },
+      action: 'webhook_secret.rotated',
+      entityType: 'WebhookEndpoint',
+      entityId: id,
+    });
+
+    return {
+      ...this.toWebhookDto(updated),
+      secret: newRawSecret,
+    };
+  }
+
+  async listWebhookAttempts(user: AuthUser, id: string) {
+    const merchant = await this.getMerchantForUser(user.id);
+    const existing = await this.prisma.webhookEndpoint.findFirst({
+      where: { id, merchantId: merchant.id },
+    });
+    if (!existing) throw notFound('WebhookEndpoint');
+
+    return this.prisma.webhookAttempt.findMany({
+      where: { endpointId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
   }
 
   // admin

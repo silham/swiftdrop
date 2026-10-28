@@ -129,3 +129,9 @@ deliveries live. M8 may add a `webhook-echo` dev service.
   - Implemented `POST /admin/merchants/:id/reject` (sets status to `REJECTED`, records optional reason, and writes audit log).
   - Implemented `POST /admin/merchants/:id/suspend` (sets status to `SUSPENDED` and writes audit log).
   - Added unit tests (`merchants.service.spec.ts`) and integration tests (`apps/api/test/merchants/merchants.e2e-spec.ts`).
+- **Task Group 2 Completed (API Key Management & Webhooks API)**:
+  - Implemented API key lifecycle (`POST /merchants/me/api-keys`, `GET /merchants/me/api-keys`, `DELETE /merchants/me/api-keys/:id`). Keys generated as `sd_live_<8-prefix>_<secret>`, hashed with SHA-256, shown once, and audited.
+  - Implemented `verifyApiKey` with constant-time hash comparison (`crypto.timingSafeEqual`), non-approved merchant rejection (403 `MERCHANT_NOT_APPROVED`), and throttled `lastUsedAt` update.
+  - Implemented AES-256-GCM encryption/decryption helpers (`crypto.ts`) using `WEBHOOK_SECRET_ENC_KEY` (exported from `merchants/index.ts`).
+  - Implemented webhook management (`POST`, `GET`, `PATCH`, `DELETE /merchants/me/webhooks`, `POST :id/rotate-secret`, `GET :id/attempts`). Secrets returned once, stored encrypted at rest with `previousSecretEncrypted` rotation support, and audited.
+  - Added unit tests (`crypto.spec.ts`, `merchants.service.spec.ts`) and updated integration tests.
