@@ -121,4 +121,31 @@ deliveries live. M8 may add a `webhook-echo` dev service.
 
 ## Status / notes
 
-_Update as you go._
+- **Task Group 1 Completed (Merchant Account & Admin Approval API)**:
+  - Implemented `POST /merchants/register` (creates user with role `MERCHANT` and merchant in `PENDING` status).
+  - Implemented `GET /merchants/me` (retrieves merchant profile and approval status for authenticated merchant).
+  - Implemented `GET /admin/merchants` (paginated list of merchants with optional status filter).
+  - Implemented `POST /admin/merchants/:id/approve` (sets status to `APPROVED`, records `approvedAt`, `approvedById`, and writes audit log via `AuditService`).
+  - Implemented `POST /admin/merchants/:id/reject` (sets status to `REJECTED`, records optional reason, and writes audit log).
+  - Implemented `POST /admin/merchants/:id/suspend` (sets status to `SUSPENDED` and writes audit log).
+  - Added unit tests (`merchants.service.spec.ts`) and integration tests (`apps/api/test/merchants/merchants.e2e-spec.ts`).
+- **Task Group 2 Completed (API Key Management & Webhooks API)**:
+  - Implemented API key lifecycle (`POST /merchants/me/api-keys`, `GET /merchants/me/api-keys`, `DELETE /merchants/me/api-keys/:id`). Keys generated as `sd_live_<8-prefix>_<secret>`, hashed with SHA-256, shown once, and audited.
+  - Implemented `verifyApiKey` with constant-time hash comparison (`crypto.timingSafeEqual`), non-approved merchant rejection (403 `MERCHANT_NOT_APPROVED`), and throttled `lastUsedAt` update.
+  - Implemented AES-256-GCM encryption/decryption helpers (`crypto.ts`) using `WEBHOOK_SECRET_ENC_KEY` (exported from `merchants/index.ts`).
+  - Implemented webhook management (`POST`, `GET`, `PATCH`, `DELETE /merchants/me/webhooks`, `POST :id/rotate-secret`, `GET :id/attempts`). Secrets returned once, stored encrypted at rest with `previousSecretEncrypted` rotation support, and audited.
+  - Added unit tests (`crypto.spec.ts`, `merchants.service.spec.ts`) and updated integration tests.
+- **Task Group 3 Completed (Partner API Engine)**:
+  - Implemented `ApiKeyGuard` partner route authentication via `X-Api-Key` header with automatic tenancy scoping (`req.merchantId`).
+  - Implemented `POST /merchant/parcels` with idempotency on `merchantReference` (returns 200 on duplicate, 201 on new parcel creation).
+  - Implemented strict tenancy isolation on `GET /merchant/parcels` (lists calling merchant's own orders) and `GET /merchant/parcels/:trackingNumber` (returns 404 for cross-merchant access).
+  - Enforced body validation: `merchantId` in request body is strictly rejected.
+  - Added unit tests (`api-key.guard.spec.ts`, `merchant-api.service.spec.ts`) and integration tests (`apps/api/test/merchants/merchant-api.e2e-spec.ts`).
+- **Task Group 4 Completed (Frontend Web Portals)**:
+  - Implemented `/merchant-signup` (`MerchantSignupForm.tsx`): registration form with client validation, pending status notification, and login redirect.
+  - Implemented `/merchant` dashboard (`MerchantDashboardView.tsx`): approval banner for non-approved states, metrics summary cards, quick action links, and recent API orders.
+  - Implemented `/merchant/orders` (`MerchantOrdersView.tsx`): order tracking table with live search and status filter dropdown.
+  - Implemented `/merchant/api-keys` (`ApiKeysManager.tsx`): key creation dialog with single-view raw key modal, clipboard copy button, prefix-only list, and revoke flow.
+  - Implemented `/merchant/webhooks` (`WebhooksManager.tsx`): endpoint management, single-view raw secret display, secret rotation, and delivery attempts inspection.
+  - Implemented `/admin/merchants` (`AdminMerchantsView.tsx`): admin approval queue with approve, reject (with reason modal), and suspend controls.
+  - Removed all `NotImplemented` placeholders from M5 web routes.

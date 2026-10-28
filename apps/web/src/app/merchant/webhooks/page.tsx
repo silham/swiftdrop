@@ -1,19 +1,19 @@
-import { NotImplemented, PageHeader } from '@/components/ui';
+import { PageHeader } from '@/components/ui';
+import { WebhooksManager } from '@/features/merchant/WebhooksManager';
 
 export const metadata = { title: 'Webhooks' };
 
 /**
- * Owner: M5. TODO(M5): CRUD /api/v1/merchants/me/webhooks + rotate-secret + attempts.
- * Put components in src/features/<your-feature>/ and keep this file thin.
+ * Owner: M5 — Merchant webhook configuration, signing secrets, and delivery attempts.
  */
 export default async function MerchantWebhooksPage() {
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader
         title={'Webhooks'}
-        description="Endpoints, signing secrets and delivery attempts"
+        description="Endpoints, HMAC signing secrets and delivery attempts for automated order updates."
       />
-      <NotImplemented owner="M5" doc="docs/members/M05-merchant-portal-api.md" />
-    </>
+      <WebhooksManager />
+    </div>
   );
 }

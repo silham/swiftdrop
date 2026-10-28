@@ -14,6 +14,7 @@ import {
   WebhookDto,
   WebhookWithSecretDto,
 } from './dto/merchant.dto';
+import { PaginationQuery } from '../../common/pagination/pagination';
 import { MerchantsService } from './merchants.service';
 
 /** Owner: M5 — merchant PORTAL (cookie session). Partner API lives in merchant-api (X-Api-Key). */
@@ -84,6 +85,7 @@ export class MerchantsController {
   }
 
   @Post('me/webhooks/:id/rotate-secret')
+  @HttpCode(200)
   @ApiOkResponse({ type: WebhookWithSecretDto })
   rotate(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.merchants.rotateWebhookSecret(user, id);
@@ -92,6 +94,22 @@ export class MerchantsController {
   @Get('me/webhooks/:id/attempts')
   attempts(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.merchants.listWebhookAttempts(user, id);
+  }
+
+  @Get('me/parcels')
+  @ApiOperation({ summary: 'List parcels for current merchant (session-based)' })
+  myParcels(
+    @CurrentUser() user: AuthUser,
+    @Query() q: PaginationQuery,
+    @Query('status') status?: string,
+  ) {
+    return this.merchants.getMyParcels(user, q, status);
+  }
+
+  @Get('me/stats')
+  @ApiOperation({ summary: 'Get parcel status counts for merchant dashboard' })
+  myStats(@CurrentUser() user: AuthUser) {
+    return this.merchants.getMyStats(user);
   }
 }
 
@@ -109,18 +127,21 @@ export class MerchantsAdminController {
 
   @Post(':id/approve')
   @HttpCode(200)
+  @ApiOkResponse({ type: MerchantDto })
   approve(@CurrentUser() admin: AuthUser, @Param('id') id: string) {
     return this.merchants.approve(admin, id);
   }
 
   @Post(':id/reject')
   @HttpCode(200)
+  @ApiOkResponse({ type: MerchantDto })
   reject(@CurrentUser() admin: AuthUser, @Param('id') id: string, @Body() dto: RejectMerchantDto) {
     return this.merchants.reject(admin, id, dto.reason);
   }
 
   @Post(':id/suspend')
   @HttpCode(200)
+  @ApiOkResponse({ type: MerchantDto })
   suspend(@CurrentUser() admin: AuthUser, @Param('id') id: string) {
     return this.merchants.suspend(admin, id);
   }
