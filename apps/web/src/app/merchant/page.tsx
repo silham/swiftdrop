@@ -11,8 +11,8 @@ export default async function MerchantPage() {
   const api = await serverApi();
 
   const [meRes, statsRes, parcelsRes] = await Promise.all([
-    api.GET('/api/v1/merchants/me' as any),
-    api.GET('/api/v1/merchants/me/stats' as any),
+    api.GET('/api/v1/merchants/me'),
+    api.GET('/api/v1/merchants/me/stats'),
     api.GET('/api/v1/merchants/me/parcels' as any, {
       params: { query: { pageSize: 5 } },
     }),
