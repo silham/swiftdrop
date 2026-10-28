@@ -135,3 +135,9 @@ deliveries live. M8 may add a `webhook-echo` dev service.
   - Implemented AES-256-GCM encryption/decryption helpers (`crypto.ts`) using `WEBHOOK_SECRET_ENC_KEY` (exported from `merchants/index.ts`).
   - Implemented webhook management (`POST`, `GET`, `PATCH`, `DELETE /merchants/me/webhooks`, `POST :id/rotate-secret`, `GET :id/attempts`). Secrets returned once, stored encrypted at rest with `previousSecretEncrypted` rotation support, and audited.
   - Added unit tests (`crypto.spec.ts`, `merchants.service.spec.ts`) and updated integration tests.
+- **Task Group 3 Completed (Partner API Engine)**:
+  - Implemented `ApiKeyGuard` partner route authentication via `X-Api-Key` header with automatic tenancy scoping (`req.merchantId`).
+  - Implemented `POST /merchant/parcels` with idempotency on `merchantReference` (returns 200 on duplicate, 201 on new parcel creation).
+  - Implemented strict tenancy isolation on `GET /merchant/parcels` (lists calling merchant's own orders) and `GET /merchant/parcels/:trackingNumber` (returns 404 for cross-merchant access).
+  - Enforced body validation: `merchantId` in request body is strictly rejected.
+  - Added unit tests (`api-key.guard.spec.ts`, `merchant-api.service.spec.ts`) and integration tests (`apps/api/test/merchants/merchant-api.e2e-spec.ts`).
