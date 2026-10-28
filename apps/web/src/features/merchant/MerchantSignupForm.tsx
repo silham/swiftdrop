@@ -151,4 +151,3 @@ export function MerchantSignupForm() {
     </form>
   );
 }
-

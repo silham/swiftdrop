@@ -54,18 +54,16 @@ export class UsersService {
     return this.insertUser(this.prisma, input);
   }
 
-  
-/**
- * Create a user using an existing Prisma transaction.
- * Used by merchant registration (M5) to ensure atomic creation.
- */
-async createUserInTransaction(
-  tx: Prisma.TransactionClient,
-  input: CreateUserInput,
-): Promise<User> {
-  return this.insertUser(tx, input);
-}
-
+  /**
+   * Create a user using an existing Prisma transaction.
+   * Used by merchant registration (M5) to ensure atomic creation.
+   */
+  async createUserInTransaction(
+    tx: Prisma.TransactionClient,
+    input: CreateUserInput,
+  ): Promise<User> {
+    return this.insertUser(tx, input);
+  }
 
   async updateMe(userId: string, dto: UpdateMeDto): Promise<UserDto> {
     const user = await this.findById(userId);

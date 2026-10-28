@@ -85,7 +85,11 @@ export class MerchantsService {
     try {
       parsed = new URL(urlStr);
     } catch {
-      throw new AppError(ERROR_CODES.VALIDATION_FAILED, 'Invalid webhook URL', HttpStatus.BAD_REQUEST);
+      throw new AppError(
+        ERROR_CODES.VALIDATION_FAILED,
+        'Invalid webhook URL',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
@@ -105,33 +109,31 @@ export class MerchantsService {
     }
   }
 
-  
-async register(dto: RegisterMerchantDto): Promise<MerchantDto> {
-  const merchant = await this.prisma.$transaction(async (tx) => {
-    // 1. Create the user within this transaction.
-    const user = await this.users.createUserInTransaction(tx, {
-      email: dto.email,
-      name: dto.contactName,
-      role: 'MERCHANT',
-      password: dto.password,
-      phone: dto.contactPhone,
+  async register(dto: RegisterMerchantDto): Promise<MerchantDto> {
+    const merchant = await this.prisma.$transaction(async (tx) => {
+      // 1. Create the user within this transaction.
+      const user = await this.users.createUserInTransaction(tx, {
+        email: dto.email,
+        name: dto.contactName,
+        role: 'MERCHANT',
+        password: dto.password,
+        phone: dto.contactPhone,
+      });
+
+      // 2. Create the merchant profile in the SAME transaction.
+      return tx.merchant.create({
+        data: {
+          ownerUserId: user.id,
+          businessName: dto.businessName.trim(),
+          contactEmail: dto.email.toLowerCase().trim(),
+          contactPhone: dto.contactPhone?.trim() || null,
+          status: 'PENDING',
+        },
+      });
     });
 
-    // 2. Create the merchant profile in the SAME transaction.
-    return tx.merchant.create({
-      data: {
-        ownerUserId: user.id,
-        businessName: dto.businessName.trim(),
-        contactEmail: dto.email.toLowerCase().trim(),
-        contactPhone: dto.contactPhone?.trim() || null,
-        status: 'PENDING',
-      },
-    });
-  });
-
-  return this.toDto(merchant);
-}
-
+    return this.toDto(merchant);
+  }
 
   async getMine(user: AuthUser): Promise<MerchantDto> {
     const merchant = await this.getMerchantForUser(user.id);
@@ -278,9 +280,7 @@ async register(dto: RegisterMerchantDto): Promise<MerchantDto> {
         url: dto.url.trim(),
         secretEncrypted,
         eventTypes:
-          dto.eventTypes && dto.eventTypes.length > 0
-            ? dto.eventTypes
-            : ['parcel.status_changed'],
+          dto.eventTypes && dto.eventTypes.length > 0 ? dto.eventTypes : ['parcel.status_changed'],
         isActive: true,
       },
     });
@@ -430,9 +430,7 @@ async register(dto: RegisterMerchantDto): Promise<MerchantDto> {
 
   // admin
   async adminList(q: ListMerchantsQuery): Promise<Paginated<MerchantDto>> {
-    const where: Prisma.MerchantWhereInput = q.status
-      ? { status: q.status as MerchantStatus }
-      : {};
+    const where: Prisma.MerchantWhereInput = q.status ? { status: q.status as MerchantStatus } : {};
 
     const [merchants, total] = await Promise.all([
       this.prisma.merchant.findMany({

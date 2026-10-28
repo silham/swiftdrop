@@ -47,9 +47,7 @@ export function MerchantDashboardView({
   const columns: Column<OrderItem>[] = [
     {
       header: 'Tracking #',
-      cell: (row) => (
-        <span className="font-mono font-medium text-brand">{row.trackingNumber}</span>
-      ),
+      cell: (row) => <span className="font-mono font-medium text-brand">{row.trackingNumber}</span>,
     },
     {
       header: 'Reference',
@@ -72,9 +70,7 @@ export function MerchantDashboardView({
     {
       header: 'Created',
       cell: (row) => (
-        <span className="text-xs text-muted">
-          {new Date(row.createdAt).toLocaleDateString()}
-        </span>
+        <span className="text-xs text-muted">{new Date(row.createdAt).toLocaleDateString()}</span>
       ),
     },
   ];
@@ -86,8 +82,9 @@ export function MerchantDashboardView({
         <Alert tone="warning">
           <p className="font-semibold text-amber-800">Account Pending Approval</p>
           <p className="mt-0.5 text-sm">
-            Your merchant account is currently under review by our operations team. You may configure
-            API keys and webhooks, but parcel creation via the partner API is restricted until approved.
+            Your merchant account is currently under review by our operations team. You may
+            configure API keys and webhooks, but parcel creation via the partner API is restricted
+            until approved.
           </p>
         </Alert>
       )}
@@ -96,7 +93,8 @@ export function MerchantDashboardView({
         <Alert tone="error">
           <p className="font-semibold">Application Rejected</p>
           <p className="mt-0.5 text-sm">
-            Your merchant application was rejected. Please reach out to SwiftDrop support for assistance.
+            Your merchant application was rejected. Please reach out to SwiftDrop support for
+            assistance.
           </p>
         </Alert>
       )}
@@ -105,7 +103,8 @@ export function MerchantDashboardView({
         <Alert tone="error">
           <p className="font-semibold">Account Suspended</p>
           <p className="mt-0.5 text-sm">
-            Your merchant account has been suspended. Incoming API calls with your API keys are temporarily blocked.
+            Your merchant account has been suspended. Incoming API calls with your API keys are
+            temporarily blocked.
           </p>
         </Alert>
       )}
@@ -200,4 +199,3 @@ export function MerchantDashboardView({
     </div>
   );
 }
-

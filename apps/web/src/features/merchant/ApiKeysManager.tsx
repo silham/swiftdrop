@@ -1,7 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Alert, Button, Card, EmptyState, FormField, Input, Table, type Column } from '@/components/ui';
+import {
+  Alert,
+  Button,
+  Card,
+  EmptyState,
+  FormField,
+  Input,
+  Table,
+  type Column,
+} from '@/components/ui';
 import { errorMessage } from '@/lib/api/errors';
 
 interface ApiKeyItem {
@@ -94,7 +103,11 @@ export function ApiKeysManager() {
   }
 
   async function handleRevoke(id: string) {
-    if (!confirm('Are you sure you want to revoke this API key? This action is permanent and immediate.')) {
+    if (
+      !confirm(
+        'Are you sure you want to revoke this API key? This action is permanent and immediate.',
+      )
+    ) {
       return;
     }
 
@@ -157,9 +170,7 @@ export function ApiKeysManager() {
     {
       header: 'Created',
       cell: (row) => (
-        <span className="text-xs text-muted">
-          {new Date(row.createdAt).toLocaleDateString()}
-        </span>
+        <span className="text-xs text-muted">{new Date(row.createdAt).toLocaleDateString()}</span>
       ),
     },
     {
@@ -190,8 +201,8 @@ export function ApiKeysManager() {
             <div>
               <h3 className="font-semibold text-brand-dark text-base">New API Key Generated</h3>
               <p className="text-xs text-muted mt-0.5">
-                Please copy this key immediately and store it in a secure location. For your security,
-                it will <strong>never be shown again</strong>.
+                Please copy this key immediately and store it in a secure location. For your
+                security, it will <strong>never be shown again</strong>.
               </p>
             </div>
             <button
@@ -228,7 +239,8 @@ export function ApiKeysManager() {
         <div>
           <h2 className="text-base font-semibold">Active & Revoked API Keys</h2>
           <p className="text-xs text-muted">
-            Used to authenticate with the partner API (<code className="font-mono">X-Api-Key</code> header).
+            Used to authenticate with the partner API (<code className="font-mono">X-Api-Key</code>{' '}
+            header).
           </p>
         </div>
         {!isCreating && (
@@ -273,7 +285,9 @@ export function ApiKeysManager() {
 
       {/* Keys Table */}
       {loading ? (
-        <p role="status" className="text-sm text-muted">Loading API keys...</p>
+        <p role="status" className="text-sm text-muted">
+          Loading API keys...
+        </p>
       ) : (
         <Table
           columns={columns}

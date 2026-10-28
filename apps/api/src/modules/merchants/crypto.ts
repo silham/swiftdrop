@@ -51,4 +51,3 @@ export function decryptWebhookSecret(secretEncrypted: string, keyBase64: string)
 
   return decrypted.toString('utf8');
 }
-

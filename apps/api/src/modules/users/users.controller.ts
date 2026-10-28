@@ -50,11 +50,7 @@ export class AdminUsersController {
 
   @Patch(':id')
   @ApiOkResponse({ type: UserDto })
-  update(
-    @Param('id') id: string,
-    @Body() dto: AdminUpdateUserDto,
-    @CurrentUser() actor: AuthUser,
-  ) {
+  update(@Param('id') id: string, @Body() dto: AdminUpdateUserDto, @CurrentUser() actor: AuthUser) {
     return this.users.adminUpdate(id, dto, actor);
   }
 }

@@ -101,10 +101,7 @@ describe('merchants module — Tasks 1 & 2 (integration)', () => {
 
       it('rejects non-merchant roles with 403 Forbidden', async () => {
         const customerCookie = await t.cookieFor('CUSTOMER');
-        await request(t.http)
-          .get('/api/v1/merchants/me')
-          .set('Cookie', customerCookie)
-          .expect(403);
+        await request(t.http).get('/api/v1/merchants/me').set('Cookie', customerCookie).expect(403);
       });
 
       it('rejects unauthenticated requests with 401', async () => {

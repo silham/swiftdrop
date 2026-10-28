@@ -1,7 +1,16 @@
 'use client';
 
 import { useEffect, useState, type ComponentProps } from 'react';
-import { Alert, Button, EmptyState, Input, Select, StatusBadge, Table, type Column } from '@/components/ui';
+import {
+  Alert,
+  Button,
+  EmptyState,
+  Input,
+  Select,
+  StatusBadge,
+  Table,
+  type Column,
+} from '@/components/ui';
 import { errorMessage } from '@/lib/api/errors';
 
 type ParcelStatus = ComponentProps<typeof StatusBadge>['status'];
@@ -98,7 +107,9 @@ export function MerchantOrdersView() {
     },
     {
       header: 'Your Reference',
-      cell: (row) => <span className="font-mono text-xs text-muted">{row.merchantReference || '—'}</span>,
+      cell: (row) => (
+        <span className="font-mono text-xs text-muted">{row.merchantReference || '—'}</span>
+      ),
     },
     {
       header: 'Recipient',
@@ -123,9 +134,7 @@ export function MerchantOrdersView() {
     {
       header: 'Created',
       cell: (row) => (
-        <span className="text-xs text-muted">
-          {new Date(row.createdAt).toLocaleDateString()}
-        </span>
+        <span className="text-xs text-muted">{new Date(row.createdAt).toLocaleDateString()}</span>
       ),
     },
   ];
@@ -133,7 +142,11 @@ export function MerchantOrdersView() {
   return (
     <div className="space-y-4">
       {error && <Alert tone="error">{error}</Alert>}
-      {loading && <p className="text-sm text-muted" role="status">Loading merchant orders...</p>}
+      {loading && (
+        <p className="text-sm text-muted" role="status">
+          Loading merchant orders...
+        </p>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 items-center gap-2 max-w-sm">
@@ -153,7 +166,9 @@ export function MerchantOrdersView() {
             }}
           >
             {STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
             ))}
           </Select>
         </div>

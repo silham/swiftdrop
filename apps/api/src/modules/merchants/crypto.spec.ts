@@ -39,4 +39,3 @@ describe('Webhook Secret Crypto (AES-256-GCM)', () => {
     );
   });
 });
-

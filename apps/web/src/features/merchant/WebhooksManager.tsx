@@ -1,7 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Alert, Button, Card, EmptyState, FormField, Input, Table, type Column } from '@/components/ui';
+import {
+  Alert,
+  Button,
+  Card,
+  EmptyState,
+  FormField,
+  Input,
+  Table,
+  type Column,
+} from '@/components/ui';
 import { errorMessage } from '@/lib/api/errors';
 
 interface WebhookItem {
@@ -282,8 +291,8 @@ export function WebhooksManager() {
                   : 'Webhook Signing Secret Generated'}
               </h3>
               <p className="text-xs text-muted mt-0.5">
-                Save this HMAC signing secret for <strong>{secretToDisplay.endpointUrl}</strong> now.
-                It will <strong>never be shown again</strong>. Use it to verify the{' '}
+                Save this HMAC signing secret for <strong>{secretToDisplay.endpointUrl}</strong>{' '}
+                now. It will <strong>never be shown again</strong>. Use it to verify the{' '}
                 <code className="font-mono">X-SwiftDrop-Signature</code> header.
               </p>
             </div>
@@ -373,22 +382,24 @@ export function WebhooksManager() {
           Loading webhook endpoints...
         </p>
       )}
-      {!loading && <Table
-        columns={columns}
-        rows={endpoints}
-        rowKey={(e) => e.id}
-        empty={
-          <EmptyState
-            title="No Webhook Endpoints"
-            description="You haven't configured any webhook endpoints to receive delivery updates."
-            action={
-              <Button variant="primary" onClick={() => setIsAdding(true)}>
-                Add First Endpoint
-              </Button>
-            }
-          />
-        }
-      />}
+      {!loading && (
+        <Table
+          columns={columns}
+          rows={endpoints}
+          rowKey={(e) => e.id}
+          empty={
+            <EmptyState
+              title="No Webhook Endpoints"
+              description="You haven't configured any webhook endpoints to receive delivery updates."
+              action={
+                <Button variant="primary" onClick={() => setIsAdding(true)}>
+                  Add First Endpoint
+                </Button>
+              }
+            />
+          }
+        />
+      )}
 
       {/* Delivery Attempts Modal/Drawer */}
       {selectedEndpoint && (
@@ -460,4 +471,3 @@ export function WebhooksManager() {
     </div>
   );
 }
-

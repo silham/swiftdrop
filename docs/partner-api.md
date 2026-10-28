@@ -8,10 +8,10 @@ Welcome to the SwiftDrop Partner API. This integration guide explains how to aut
 
 The Partner API provides automated, high-throughput delivery booking directly from your eCommerce platform, ERP, or warehouse management system.
 
-| Environment | Base URL |
-| :--- | :--- |
-| **Development / Local** | `http://localhost:8080/api/v1` |
-| **Production** | `https://api.swiftdrop.lk/api/v1` |
+| Environment                  | Base URL                                               |
+| :--------------------------- | :----------------------------------------------------- |
+| **Development / Local**      | `http://localhost:8080/api/v1`                         |
+| **Production**               | `https://api.swiftdrop.lk/api/v1`                      |
 | **Interactive OpenAPI Docs** | `http://localhost:8080/api/docs` (Tag: `merchant-api`) |
 
 ---
@@ -25,11 +25,13 @@ X-Api-Key: sd_live_ab12cd34_dGVzdHNlY3JldGtleXZhbHVlMTIzNDU2Nzg5MDEyMzQ1Njc=
 ```
 
 ### Obtaining Your API Key
+
 1. Register for a merchant account at `/merchant-signup`.
 2. Once an administrator approves your account, log in at `/login` and navigate to the **API keys** portal (`/merchant/api-keys`).
 3. Click **Generate Key**. Your raw key will be shown **only once**. Copy and store it in a secure secrets manager.
 
 ### Security Best Practices
+
 - Never commit API keys to version control or expose them in client-side code.
 - Keys are strictly rejected if passed in URL query parameters.
 - If a key is compromised, revoke it immediately from `/merchant/api-keys` and generate a replacement.
@@ -59,6 +61,7 @@ Create a delivery order for pickup and dropoff.
   - `X-Api-Key: <your-api-key>`
 
 #### Request Body (`MerchantCreateParcelDto`):
+
 ```json
 {
   "merchantReference": "ORDER-98721",
@@ -78,23 +81,25 @@ Create a delivery order for pickup and dropoff.
 ```
 
 #### Fields Description:
-| Field | Type | Description |
-| :--- | :--- | :--- |
+
+| Field               | Type     | Description                                                  |
+| :------------------ | :------- | :----------------------------------------------------------- |
 | `merchantReference` | `string` | **Required.** Your unique order reference (1–64 characters). |
-| `senderName` | `string` | **Required.** Origin contact or business name. |
-| `senderPhone` | `string` | **Required.** Valid phone number (e.g. `+94771234567`). |
-| `pickupAddress` | `string` | **Required.** Street pickup address. |
-| `pickupCity` | `string` | **Required.** Pickup city name. |
-| `recipientName` | `string` | **Required.** Destination recipient name. |
-| `recipientPhone` | `string` | **Required.** Valid recipient mobile number. |
-| `recipientEmail` | `string` | Optional. Email for automated delivery notifications. |
-| `dropoffAddress` | `string` | **Required.** Street dropoff address. |
-| `dropoffCity` | `string` | **Required.** Destination city name. |
-| `size` | `string` | **Required.** `SMALL`, `MEDIUM`, or `LARGE`. |
-| `weightKg` | `number` | **Required.** Parcel weight in kilograms (0.01 to 100.0). |
-| `description` | `string` | Optional. Brief description of package contents. |
+| `senderName`        | `string` | **Required.** Origin contact or business name.               |
+| `senderPhone`       | `string` | **Required.** Valid phone number (e.g. `+94771234567`).      |
+| `pickupAddress`     | `string` | **Required.** Street pickup address.                         |
+| `pickupCity`        | `string` | **Required.** Pickup city name.                              |
+| `recipientName`     | `string` | **Required.** Destination recipient name.                    |
+| `recipientPhone`    | `string` | **Required.** Valid recipient mobile number.                 |
+| `recipientEmail`    | `string` | Optional. Email for automated delivery notifications.        |
+| `dropoffAddress`    | `string` | **Required.** Street dropoff address.                        |
+| `dropoffCity`       | `string` | **Required.** Destination city name.                         |
+| `size`              | `string` | **Required.** `SMALL`, `MEDIUM`, or `LARGE`.                 |
+| `weightKg`          | `number` | **Required.** Parcel weight in kilograms (0.01 to 100.0).    |
+| `description`       | `string` | Optional. Brief description of package contents.             |
 
 #### cURL Example:
+
 ```bash
 curl -X POST http://localhost:8080/api/v1/merchant/parcels \
   -H "X-Api-Key: sd_live_ab12cd34_dGVzdHNlY3JldA..." \
@@ -115,6 +120,7 @@ curl -X POST http://localhost:8080/api/v1/merchant/parcels \
 ```
 
 #### Response (`201 Created` or `200 OK` on idempotent retry):
+
 ```json
 {
   "id": "cm3a4b5c60000abcde1234567",
@@ -146,12 +152,14 @@ Retrieve a paginated list of deliveries created by your merchant account.
 - **Headers**: `X-Api-Key: <your-api-key>`
 
 #### cURL Example:
+
 ```bash
 curl -X GET "http://localhost:8080/api/v1/merchant/parcels?page=1&pageSize=10" \
   -H "X-Api-Key: sd_live_ab12cd34_dGVzdHNlY3JldA..."
 ```
 
 #### Response (`200 OK`):
+
 ```json
 {
   "data": [
@@ -192,12 +200,14 @@ Retrieve full details for an individual parcel.
 - **Headers**: `X-Api-Key: <your-api-key>`
 
 #### cURL Example:
+
 ```bash
 curl -X GET http://localhost:8080/api/v1/merchant/parcels/SD100000001 \
   -H "X-Api-Key: sd_live_ab12cd34_dGVzdHNlY3JldA..."
 ```
 
 #### Response (`200 OK`):
+
 ```json
 {
   "id": "cm3a4b5c60000abcde1234567",
@@ -218,7 +228,7 @@ curl -X GET http://localhost:8080/api/v1/merchant/parcels/SD100000001 \
 }
 ```
 
-*Note: If the parcel does not belong to your merchant account, the API returns `404 Not Found`.*
+_Note: If the parcel does not belong to your merchant account, the API returns `404 Not Found`._
 
 ---
 
@@ -237,13 +247,13 @@ All API errors return standard RFC-compliant JSON bodies:
 }
 ```
 
-| HTTP Status | Error Code | Meaning |
-| :--- | :--- | :--- |
-| `400 Bad Request` | `BAD_REQUEST` | Validation failed or unexpected payload fields provided (e.g. attempting to pass `merchantId` in request body). |
-| `401 Unauthorized` | `INVALID_API_KEY` | Missing, formatted incorrectly, or revoked `X-Api-Key` header. |
-| `403 Forbidden` | `MERCHANT_NOT_APPROVED` | Merchant account is `PENDING`, `REJECTED`, or `SUSPENDED`. |
-| `404 Not Found` | `NOT_FOUND` | Parcel not found or belongs to another merchant. |
-| `429 Too Many Requests` | `THROTTLED` | Rate limit exceeded. |
+| HTTP Status             | Error Code              | Meaning                                                                                                         |
+| :---------------------- | :---------------------- | :-------------------------------------------------------------------------------------------------------------- |
+| `400 Bad Request`       | `BAD_REQUEST`           | Validation failed or unexpected payload fields provided (e.g. attempting to pass `merchantId` in request body). |
+| `401 Unauthorized`      | `INVALID_API_KEY`       | Missing, formatted incorrectly, or revoked `X-Api-Key` header.                                                  |
+| `403 Forbidden`         | `MERCHANT_NOT_APPROVED` | Merchant account is `PENDING`, `REJECTED`, or `SUSPENDED`.                                                      |
+| `404 Not Found`         | `NOT_FOUND`             | Parcel not found or belongs to another merchant.                                                                |
+| `429 Too Many Requests` | `THROTTLED`             | Rate limit exceeded.                                                                                            |
 
 ---
 
@@ -255,13 +265,14 @@ Configure HTTP endpoints in the **Webhooks** dashboard (`/merchant/webhooks`) to
 
 Every POST request sent from SwiftDrop to your webhook URL includes:
 
-| Header | Description |
-| :--- | :--- |
-| `X-SwiftDrop-Event-Id` | Unique ID of the event (use for idempotency deduplication). |
-| `X-SwiftDrop-Event-Type` | The event name (e.g. `parcel.status_changed`). |
-| `X-SwiftDrop-Signature` | Cryptographic signature formatted as `t=<unix_timestamp>,v1=<hex_hmac>`. |
+| Header                   | Description                                                              |
+| :----------------------- | :----------------------------------------------------------------------- |
+| `X-SwiftDrop-Event-Id`   | Unique ID of the event (use for idempotency deduplication).              |
+| `X-SwiftDrop-Event-Type` | The event name (e.g. `parcel.status_changed`).                           |
+| `X-SwiftDrop-Signature`  | Cryptographic signature formatted as `t=<unix_timestamp>,v1=<hex_hmac>`. |
 
 ### 6.2 Sample Webhook Payload
+
 ```json
 {
   "eventId": "evt_cm3001abc",
@@ -286,12 +297,14 @@ Every POST request sent from SwiftDrop to your webhook URL includes:
 To guarantee that webhook payloads originate from SwiftDrop and were not tampered with, verify the **`X-SwiftDrop-Signature`** header using your endpoint's signing secret.
 
 ### Verification Algorithm:
+
 1. Extract the timestamp `t` and signature `v1` from `X-SwiftDrop-Signature`.
 2. Ensure `t` is within an acceptable time window (e.g., 5 minutes) to prevent replay attacks.
 3. Compute the HMAC-SHA256 of `${t}.${rawBody}` using your endpoint's secret.
 4. Compare your computed digest with `v1` using constant-time comparison.
 
 ### Production Node.js Verification Snippet:
+
 ```typescript
 import * as crypto from 'crypto';
 
@@ -334,10 +347,7 @@ export function verifySwiftDropSignature({
 
   // 3. Compute expected HMAC-SHA256 of `${timestamp}.${rawBody}`
   const payloadToSign = `${timestamp}.${typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8')}`;
-  const expectedSignature = crypto
-    .createHmac('sha256', secret)
-    .update(payloadToSign)
-    .digest('hex');
+  const expectedSignature = crypto.createHmac('sha256', secret).update(payloadToSign).digest('hex');
 
   // 4. Timing-safe comparison
   const expectedBuf = Buffer.from(expectedSignature, 'utf8');
@@ -352,6 +362,7 @@ export function verifySwiftDropSignature({
 ```
 
 ### Express / NestJS Usage Example:
+
 ```typescript
 app.post('/api/webhooks/swiftdrop', express.raw({ type: 'application/json' }), (req, res) => {
   const signature = req.headers['x-swiftdrop-signature'] as string;
@@ -373,4 +384,3 @@ app.post('/api/webhooks/swiftdrop', express.raw({ type: 'application/json' }), (
   return res.status(200).send('OK');
 });
 ```
-

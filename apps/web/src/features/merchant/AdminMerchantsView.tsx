@@ -1,7 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Alert, Button, EmptyState, FormField, Input, Select, Table, type Column } from '@/components/ui';
+import {
+  Alert,
+  Button,
+  EmptyState,
+  FormField,
+  Input,
+  Select,
+  Table,
+  type Column,
+} from '@/components/ui';
 import { errorMessage } from '@/lib/api/errors';
 
 interface MerchantRecord {
@@ -85,7 +94,11 @@ export function AdminMerchantsView() {
   }, [selectedStatus]);
 
   async function handleApprove(id: string, name: string) {
-    if (!confirm(`Are you sure you want to approve "${name}"? This allows them to use the partner API.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to approve "${name}"? This allows them to use the partner API.`,
+      )
+    ) {
       return;
     }
 
@@ -134,7 +147,11 @@ export function AdminMerchantsView() {
   }
 
   async function handleSuspend(id: string, name: string) {
-    if (!confirm(`Are you sure you want to suspend "${name}"? Their API keys will be rejected immediately.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to suspend "${name}"? Their API keys will be rejected immediately.`,
+      )
+    ) {
       return;
     }
 
@@ -182,15 +199,18 @@ export function AdminMerchantsView() {
     {
       header: 'Status',
       cell: (row) => {
-        const toneClasses = {
-          PENDING: 'bg-amber-100 text-amber-800',
-          APPROVED: 'bg-green-100 text-green-800',
-          REJECTED: 'bg-red-100 text-red-800',
-          SUSPENDED: 'bg-slate-200 text-slate-800',
-        }[row.status] || 'bg-slate-100 text-slate-800';
+        const toneClasses =
+          {
+            PENDING: 'bg-amber-100 text-amber-800',
+            APPROVED: 'bg-green-100 text-green-800',
+            REJECTED: 'bg-red-100 text-red-800',
+            SUSPENDED: 'bg-slate-200 text-slate-800',
+          }[row.status] || 'bg-slate-100 text-slate-800';
 
         return (
-          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${toneClasses}`}>
+          <span
+            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${toneClasses}`}
+          >
             {row.status}
           </span>
         );
@@ -199,9 +219,7 @@ export function AdminMerchantsView() {
     {
       header: 'Applied Date',
       cell: (row) => (
-        <span className="text-xs text-muted">
-          {new Date(row.createdAt).toLocaleDateString()}
-        </span>
+        <span className="text-xs text-muted">{new Date(row.createdAt).toLocaleDateString()}</span>
       ),
     },
     {
@@ -331,7 +349,11 @@ export function AdminMerchantsView() {
       </div>
 
       {/* Merchants Table */}
-      {loading && <p className="text-sm text-muted" role="status">Loading merchants...</p>}
+      {loading && (
+        <p className="text-sm text-muted" role="status">
+          Loading merchants...
+        </p>
+      )}
       <Table
         columns={columns}
         rows={filtered}
@@ -350,4 +372,3 @@ export function AdminMerchantsView() {
     </div>
   );
 }
-
