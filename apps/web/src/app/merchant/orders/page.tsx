@@ -1,16 +1,19 @@
-import { NotImplemented, PageHeader } from '@/components/ui';
+import { PageHeader } from '@/components/ui';
+import { MerchantOrdersView } from '@/features/merchant/MerchantOrdersView';
 
 export const metadata = { title: 'Orders' };
 
 /**
- * Owner: M5. TODO(M5): list merchant parcels (add a portal endpoint or reuse merchant API via session).
- * Put components in src/features/<your-feature>/ and keep this file thin.
+ * Owner: M5 — Merchant orders created via the partner API.
  */
 export default async function MerchantOrdersPage() {
   return (
-    <>
-      <PageHeader title={'Orders'} description="Parcels created through your API" />
-      <NotImplemented owner="M5" doc="docs/members/M05-merchant-portal-api.md" />
-    </>
+    <div className="space-y-6">
+      <PageHeader
+        title={'Orders'}
+        description="View and filter all parcels submitted through your partner API."
+      />
+      <MerchantOrdersView />
+    </div>
   );
 }

@@ -141,3 +141,11 @@ deliveries live. M8 may add a `webhook-echo` dev service.
   - Implemented strict tenancy isolation on `GET /merchant/parcels` (lists calling merchant's own orders) and `GET /merchant/parcels/:trackingNumber` (returns 404 for cross-merchant access).
   - Enforced body validation: `merchantId` in request body is strictly rejected.
   - Added unit tests (`api-key.guard.spec.ts`, `merchant-api.service.spec.ts`) and integration tests (`apps/api/test/merchants/merchant-api.e2e-spec.ts`).
+- **Task Group 4 Completed (Frontend Web Portals)**:
+  - Implemented `/merchant-signup` (`MerchantSignupForm.tsx`): registration form with client validation, pending status notification, and login redirect.
+  - Implemented `/merchant` dashboard (`MerchantDashboardView.tsx`): approval banner for non-approved states, metrics summary cards, quick action links, and recent API orders.
+  - Implemented `/merchant/orders` (`MerchantOrdersView.tsx`): order tracking table with live search and status filter dropdown.
+  - Implemented `/merchant/api-keys` (`ApiKeysManager.tsx`): key creation dialog with single-view raw key modal, clipboard copy button, prefix-only list, and revoke flow.
+  - Implemented `/merchant/webhooks` (`WebhooksManager.tsx`): endpoint management, single-view raw secret display, secret rotation, and delivery attempts inspection.
+  - Implemented `/admin/merchants` (`AdminMerchantsView.tsx`): admin approval queue with approve, reject (with reason modal), and suspend controls.
+  - Removed all `NotImplemented` placeholders from M5 web routes.

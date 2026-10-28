@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Card, NotImplemented } from '@/components/ui';
+import { Card } from '@/components/ui';
+import { MerchantSignupForm } from '@/features/merchant/MerchantSignupForm';
 
 export const metadata = { title: 'Merchant sign-up' };
 
@@ -12,7 +13,7 @@ export default function MerchantSignupPage() {
       </Link>
       <Card className="mt-6 space-y-4">
         <h1 className="text-xl font-semibold">Become a SwiftDrop merchant</h1>
-        <NotImplemented owner="M5" doc="docs/members/M05-merchant-portal-api.md" />
+        <MerchantSignupForm />
       </Card>
     </main>
   );

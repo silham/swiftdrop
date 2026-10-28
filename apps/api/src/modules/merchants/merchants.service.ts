@@ -367,6 +367,66 @@ export class MerchantsService {
     });
   }
 
+  async getMyParcels(user: AuthUser, q: PaginationQuery, status?: string) {
+    const merchant = await this.getMerchantForUser(user.id);
+    const where: Prisma.ParcelWhereInput = {
+      merchantId: merchant.id,
+      ...(status ? { status: status as any } : {}),
+    };
+    const [parcels, total] = await Promise.all([
+      this.prisma.parcel.findMany({
+        where,
+        skip: q.skip,
+        take: q.take,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.parcel.count({ where }),
+    ]);
+
+    return paginated(
+      parcels.map((p) => ({
+        id: p.id,
+        trackingNumber: p.trackingNumber,
+        merchantReference: p.merchantReference ?? undefined,
+        status: p.status,
+        senderName: p.senderName,
+        recipientName: p.recipientName,
+        dropoffCity: p.dropoffCity,
+        feeCents: p.feeCents,
+        currency: p.currency,
+        createdAt: p.createdAt,
+      })),
+      total,
+      q,
+    );
+  }
+
+  async getMyStats(user: AuthUser) {
+    const merchant = await this.getMerchantForUser(user.id);
+    const counts = await this.prisma.parcel.groupBy({
+      by: ['status'],
+      where: { merchantId: merchant.id },
+      _count: true,
+    });
+
+    const summary: Record<string, number> = {
+      TOTAL: 0,
+      CREATED: 0,
+      PICKED_UP: 0,
+      IN_TRANSIT: 0,
+      OUT_FOR_DELIVERY: 0,
+      DELIVERED: 0,
+      FAILED: 0,
+    };
+
+    for (const c of counts) {
+      summary[c.status] = c._count;
+      summary.TOTAL += c._count;
+    }
+
+    return summary;
+  }
+
   // admin
   async adminList(q: ListMerchantsQuery): Promise<Paginated<MerchantDto>> {
     const where: Prisma.MerchantWhereInput = q.status

@@ -1,18 +1,21 @@
-import { NotImplemented, PageHeader } from '@/components/ui';
+import { PageHeader } from '@/components/ui';
+import { AdminMerchantsView } from '@/features/merchant/AdminMerchantsView';
 import { requireRole } from '@/lib/auth/session';
 
 export const metadata = { title: 'Merchants' };
 
 /**
- * Owner: M5. TODO(M5): GET /api/v1/admin/merchants + approve/reject/suspend.
- * Put components in src/features/<your-feature>/ and keep this file thin.
+ * Owner: M5 — Admin merchant approval and status management.
  */
 export default async function AdminMerchantsPage() {
   await requireRole(['ADMIN']);
   return (
-    <>
-      <PageHeader title={'Merchants'} description="Approve, reject or suspend merchants" />
-      <NotImplemented owner="M5" doc="docs/members/M05-merchant-portal-api.md" />
-    </>
+    <div className="space-y-6">
+      <PageHeader
+        title={'Merchants'}
+        description="Review partner merchant registrations, approve accounts, or suspend access."
+      />
+      <AdminMerchantsView />
+    </div>
   );
 }

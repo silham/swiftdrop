@@ -93,6 +93,22 @@ export class MerchantsController {
   attempts(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.merchants.listWebhookAttempts(user, id);
   }
+
+  @Get('me/parcels')
+  @ApiOperation({ summary: 'List parcels for current merchant (session-based)' })
+  myParcels(
+    @CurrentUser() user: AuthUser,
+    @Query() q: PaginationQuery,
+    @Query('status') status?: string,
+  ) {
+    return this.merchants.getMyParcels(user, q, status);
+  }
+
+  @Get('me/stats')
+  @ApiOperation({ summary: 'Get parcel status counts for merchant dashboard' })
+  myStats(@CurrentUser() user: AuthUser) {
+    return this.merchants.getMyStats(user);
+  }
 }
 
 /** Owner: M5 — merchant approval (admin). */
