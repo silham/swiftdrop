@@ -105,4 +105,23 @@ The `POST /pricing/estimate` endpoint is public. Admin CRUD lives at `/admin/zon
 
 ## Status / notes
 
-_Update as you go._
+- **Pricing Module**:
+  - `PricingService.estimate`: Implemented zone resolution by city with case-insensitivity, candidate rule matching (wildcards, validity window), specificity scoring (0–3), priority and creation-date tie-breaking, and fee calculation with ceiling weight rounding (`baseFeeCents + perKgCents * ceil(weightKg)`).
+  - Admin zones CRUD at `GET /api/v1/admin/zones`, `POST /api/v1/admin/zones`, `PATCH /api/v1/admin/zones/:id` with duplicate code prevention, active city overlap protection, and audit logging.
+  - Admin pricing rules CRUD at `GET /api/v1/admin/pricing-rules`, `POST /api/v1/admin/pricing-rules`, `PATCH /api/v1/admin/pricing-rules/:id` with fee validation and audit logging.
+  - Public `POST /api/v1/pricing/estimate` endpoint active.
+- **Dispatch Module**:
+  - `GET /api/v1/dispatch/unassigned`: Oldest-first unassigned parcel queue with optional zone filtering, paginated, omitting sensitive recipient PII.
+  - `POST /api/v1/dispatch/assignments`: Transactional assignment validating parcel state (`CREATED` or `FAILED`), courier availability (`isAvailable = true`), active workload limit (`activeParcels < maxActiveParcels`), double-assignment prevention (`ALREADY_ASSIGNED` 409), recording audit entry (`parcel.assigned`), and enqueuing outbox event (`parcel.courier_assigned`).
+  - `DELETE /api/v1/dispatch/assignments/:id`: Unassignment restricted to early statuses (`CREATED` or `PICKED_UP`), cancels assignment, and records audit entry (`parcel.unassigned`).
+  - `GET /api/v1/dispatch/couriers/workload`: Fleet workload view returning active delivery count vs capacity limit.
+  - `DispatchService.completeAssignment`: Marks active assignment `COMPLETED` upon parcel delivery.
+- **Web Pages & Features**:
+  - `/dispatch`: `UnassignedQueue` with zone filter, responsive table, and `AssignCourierModal` with live courier workload picker.
+  - `/dispatch/couriers`: `CourierWorkload` with capacity utilization bars and fleet summary statistics.
+  - `/admin/zones`: `ZonesManagement` with CRUD table, active/inactive toggle, and create/edit modal.
+  - `/admin/pricing`: `PricingRulesManagement` with rules CRUD, active toggle, and interactive `EstimatePreview` calculator.
+- **Testing**:
+  - Unit tests for Pricing (`pricing.service.spec.ts`) covering specificity, priority tie-breaking, wildcards, validity windows, ceiling weight rounding, unserviced cities (422), and inactive zones.
+  - Unit tests for Dispatch (`dispatch.service.spec.ts`) covering capacity checks, already-assigned checks, availability checks, unassignment status restrictions, and completion.
+  - Integration tests for Pricing (`pricing.e2e-spec.ts`) and Dispatch (`dispatch.e2e-spec.ts`) including negative authorization matrix cases for non-privileged roles (`CUSTOMER`, `COURIER`).

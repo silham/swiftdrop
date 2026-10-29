@@ -43,6 +43,8 @@ export class ZoneDto {
   @ApiProperty() name: string;
   @ApiProperty({ type: [String] }) cities: string[];
   @ApiProperty() isActive: boolean;
+  @ApiPropertyOptional() createdAt?: Date;
+  @ApiPropertyOptional() updatedAt?: Date;
 }
 
 export class CreateZoneDto {
@@ -62,11 +64,17 @@ export class PricingRuleDto {
   @ApiProperty() name: string;
   @ApiPropertyOptional({ nullable: true }) fromZoneId: string | null;
   @ApiPropertyOptional({ nullable: true }) toZoneId: string | null;
+  @ApiPropertyOptional({ nullable: true }) fromZoneName?: string | null;
+  @ApiPropertyOptional({ nullable: true }) toZoneName?: string | null;
   @ApiPropertyOptional({ enum: PARCEL_SIZES, nullable: true }) size: ParcelSize | null;
   @ApiProperty() baseFeeCents: number;
   @ApiProperty() perKgCents: number;
   @ApiProperty() priority: number;
   @ApiProperty() isActive: boolean;
+  @ApiPropertyOptional({ nullable: true }) validFrom?: Date | null;
+  @ApiPropertyOptional({ nullable: true }) validTo?: Date | null;
+  @ApiPropertyOptional() createdAt?: Date;
+  @ApiPropertyOptional() updatedAt?: Date;
 }
 
 export class CreatePricingRuleDto {
