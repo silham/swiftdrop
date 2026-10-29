@@ -1,16 +1,19 @@
-import { NotImplemented, PageHeader } from '@/components/ui';
+import { PageHeader } from '@/components/ui';
+import { ZonesManagement } from '@/features/pricing';
 
 export const metadata = { title: 'Delivery zones' };
 
 /**
- * Owner: M7. TODO(M7): GET/POST/PATCH /api/v1/admin/zones.
- * Put components in src/features/<your-feature>/ and keep this file thin.
+ * Owner: M7 — Delivery zones management (CRUD, active toggle, serviced cities).
  */
 export default async function AdminZonesPage() {
   return (
     <>
-      <PageHeader title={'Delivery zones'} description="Cities served by each zone" />
-      <NotImplemented owner="M7" doc="docs/members/M07-dispatch-admin-pricing.md" />
+      <PageHeader
+        title="Delivery Zones"
+        description="Configure geographical service areas and the cities serviced by each zone."
+      />
+      <ZonesManagement />
     </>
   );
 }

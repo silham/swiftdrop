@@ -14,7 +14,9 @@ export class ListUnassignedQuery extends PaginationQuery {
 export class CourierWorkloadDto {
   @ApiProperty() courierId: string;
   @ApiProperty() name: string;
+  @ApiPropertyOptional({ nullable: true }) email?: string;
   @ApiPropertyOptional({ nullable: true }) zoneId: string | null;
+  @ApiPropertyOptional({ nullable: true }) zoneName?: string | null;
   @ApiProperty() isAvailable: boolean;
   @ApiProperty() activeParcels: number;
   @ApiProperty() maxActiveParcels: number;
@@ -26,4 +28,19 @@ export class AssignmentDto {
   @ApiProperty() courierId: string;
   @ApiProperty() status: string;
   @ApiProperty() assignedAt: Date;
+}
+
+export class UnassignedParcelDto {
+  @ApiProperty() id: string;
+  @ApiProperty() trackingNumber: string;
+  @ApiProperty() status: string;
+  @ApiPropertyOptional({ nullable: true }) pickupZoneId: string | null;
+  @ApiPropertyOptional({ nullable: true }) pickupZoneName?: string | null;
+  @ApiProperty() pickupCity: string;
+  @ApiProperty() dropoffCity: string;
+  @ApiProperty() size: string;
+  @ApiProperty() weightKg: number;
+  @ApiProperty() feeCents: number;
+  @ApiProperty() currency: string;
+  @ApiProperty() createdAt: Date;
 }

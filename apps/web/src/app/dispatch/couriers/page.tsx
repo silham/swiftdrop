@@ -1,16 +1,19 @@
-import { NotImplemented, PageHeader } from '@/components/ui';
+import { PageHeader } from '@/components/ui';
+import { CourierWorkload } from '@/features/dispatch';
 
 export const metadata = { title: 'Courier workload' };
 
 /**
- * Owner: M7. TODO(M7): GET /api/v1/dispatch/couriers/workload.
- * Put components in src/features/<your-feature>/ and keep this file thin.
+ * Owner: M7 — Courier fleet workload management and capacity monitoring.
  */
 export default async function DispatchCouriersPage() {
   return (
     <>
-      <PageHeader title={'Courier workload'} description="Active parcels per courier" />
-      <NotImplemented owner="M7" doc="docs/members/M07-dispatch-admin-pricing.md" />
+      <PageHeader
+        title="Courier Workload"
+        description="Monitor active parcel assignments and fleet capacity across delivery zones."
+      />
+      <CourierWorkload />
     </>
   );
 }
