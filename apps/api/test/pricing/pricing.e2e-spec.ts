@@ -126,6 +126,8 @@ describe('Pricing Module (Integration)', () => {
           baseFeeCents: 60000,
           perKgCents: 4000,
           priority: 2,
+          // Inactive: an active island-wide rule would win every later estimate in the shared test DB.
+          isActive: false,
         })
         .expect(201);
 

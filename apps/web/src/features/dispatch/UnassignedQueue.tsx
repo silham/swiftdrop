@@ -57,10 +57,15 @@ export function UnassignedQueue() {
     void loadZones();
   }, []);
 
+  /** For buttons and after edits: show the spinner, then reload. */
   async function loadParcels(targetZone = selectedZoneId, targetPage = page) {
     setLoading(true);
     setError(undefined);
+    await fetchParcels(targetZone, targetPage);
+  }
 
+  /** Fetches and stores the data. Only sets state after the request, so effects can call it. */
+  async function fetchParcels(targetZone = selectedZoneId, targetPage = page) {
     const query: { page: number; pageSize: number; zoneId?: string } = {
       page: targetPage,
       pageSize: 20,
@@ -83,10 +88,12 @@ export function UnassignedQueue() {
   }
 
   useEffect(() => {
-    void loadParcels(selectedZoneId, page);
+    void fetchParcels(selectedZoneId, page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only when the filter or page changes
   }, [selectedZoneId, page]);
 
   function handleZoneChange(zoneId: string) {
+    setLoading(true);
     setSelectedZoneId(zoneId);
     setPage(1);
   }
@@ -209,6 +216,7 @@ export function UnassignedQueue() {
 
       {assignTarget && (
         <AssignCourierModal
+          key={assignTarget?.id ?? 'none'}
           parcel={assignTarget}
           onClose={() => setAssignTarget(null)}
           onAssigned={() => loadParcels()}

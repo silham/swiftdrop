@@ -62,17 +62,17 @@ export class UpdateZoneDto extends PartialType(CreateZoneDto) {}
 export class PricingRuleDto {
   @ApiProperty() id: string;
   @ApiProperty() name: string;
-  @ApiPropertyOptional({ nullable: true }) fromZoneId: string | null;
-  @ApiPropertyOptional({ nullable: true }) toZoneId: string | null;
-  @ApiPropertyOptional({ nullable: true }) fromZoneName?: string | null;
-  @ApiPropertyOptional({ nullable: true }) toZoneName?: string | null;
-  @ApiPropertyOptional({ enum: PARCEL_SIZES, nullable: true }) size: ParcelSize | null;
+  @ApiProperty({ type: String, nullable: true }) fromZoneId: string | null;
+  @ApiProperty({ type: String, nullable: true }) toZoneId: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) fromZoneName?: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) toZoneName?: string | null;
+  @ApiProperty({ enum: PARCEL_SIZES, nullable: true }) size: ParcelSize | null;
   @ApiProperty() baseFeeCents: number;
   @ApiProperty() perKgCents: number;
   @ApiProperty() priority: number;
   @ApiProperty() isActive: boolean;
-  @ApiPropertyOptional({ nullable: true }) validFrom?: Date | null;
-  @ApiPropertyOptional({ nullable: true }) validTo?: Date | null;
+  @ApiPropertyOptional({ type: Date, nullable: true }) validFrom?: Date | null;
+  @ApiPropertyOptional({ type: Date, nullable: true }) validTo?: Date | null;
   @ApiPropertyOptional() createdAt?: Date;
   @ApiPropertyOptional() updatedAt?: Date;
 }

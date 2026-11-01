@@ -21,10 +21,15 @@ export function CourierWorkload() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
+  /** For buttons and after edits: show the spinner, then reload. */
   async function loadWorkload() {
     setLoading(true);
     setError(undefined);
+    await fetchWorkload();
+  }
 
+  /** Fetches and stores the data. Only sets state after the request, so effects can call it. */
+  async function fetchWorkload() {
     const { data, error: apiErr } = await api.GET('/api/v1/dispatch/couriers/workload');
     setLoading(false);
 
@@ -37,7 +42,7 @@ export function CourierWorkload() {
   }
 
   useEffect(() => {
-    void loadWorkload();
+    void fetchWorkload();
   }, []);
 
   const totalCouriers = couriers.length;

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, FormField, Select } from '@/components/ui';
 import { api } from '@/lib/api/client';
 import { errorMessage } from '@/lib/api/errors';
+import type { CourierWorkloadItem } from './CourierWorkload';
 
 export interface AssignableParcel {
   id: string;
@@ -16,17 +17,6 @@ export interface AssignableParcel {
   pickupZoneName?: string | null;
 }
 
-export interface CourierWorkloadItem {
-  courierId: string;
-  name: string;
-  email?: string;
-  zoneId: string | null;
-  zoneName?: string | null;
-  isAvailable: boolean;
-  activeParcels: number;
-  maxActiveParcels: number;
-}
-
 interface AssignCourierModalProps {
   parcel: AssignableParcel | null;
   onClose: () => void;
@@ -36,7 +26,8 @@ interface AssignCourierModalProps {
 export function AssignCourierModal({ parcel, onClose, onAssigned }: AssignCourierModalProps) {
   const [couriers, setCouriers] = useState<CourierWorkloadItem[]>([]);
   const [selectedCourierId, setSelectedCourierId] = useState<string>('');
-  const [loadingCouriers, setLoadingCouriers] = useState(false);
+  // The parent remounts this modal per parcel (key=parcel.id), so state starts fresh each time.
+  const [loadingCouriers, setLoadingCouriers] = useState(parcel !== null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -44,8 +35,6 @@ export function AssignCourierModal({ parcel, onClose, onAssigned }: AssignCourie
     if (!parcel) return;
 
     let mounted = true;
-    setLoadingCouriers(true);
-    setError(undefined);
 
     async function fetchCouriers() {
       const { data, error: apiErr } = await api.GET('/api/v1/dispatch/couriers/workload');

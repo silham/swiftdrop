@@ -1,6 +1,5 @@
 import { HttpStatus } from '@nestjs/common';
 import { ERROR_CODES } from '@swiftdrop/contracts';
-import { AppError } from '../../common/errors/app-error';
 import { PricingService } from './pricing.service';
 
 describe('PricingService (Unit)', () => {
@@ -22,14 +21,6 @@ describe('PricingService (Unit)', () => {
     name: 'Kandy',
     cities: ['kandy', 'peradeniya', 'katugastota'],
     isActive: true,
-  };
-
-  const zoneInactive = {
-    id: 'zone-inactive',
-    code: 'JFN',
-    name: 'Jaffna',
-    cities: ['jaffna'],
-    isActive: false,
   };
 
   beforeEach(() => {

@@ -125,3 +125,19 @@ The `POST /pricing/estimate` endpoint is public. Admin CRUD lives at `/admin/zon
   - Unit tests for Pricing (`pricing.service.spec.ts`) covering specificity, priority tie-breaking, wildcards, validity windows, ceiling weight rounding, unserviced cities (422), and inactive zones.
   - Unit tests for Dispatch (`dispatch.service.spec.ts`) covering capacity checks, already-assigned checks, availability checks, unassignment status restrictions, and completion.
   - Integration tests for Pricing (`pricing.e2e-spec.ts`) and Dispatch (`dispatch.e2e-spec.ts`) including negative authorization matrix cases for non-privileged roles (`CUSTOMER`, `COURIER`).
+
+**Review fixes (merge of PR #8):**
+
+- `assign()` locks the parcel row, then the courier profile row (`SELECT … FOR UPDATE`), so two
+  dispatchers can't create two ACTIVE assignments for one parcel or overfill a courier. Tested with
+  two concurrent requests (one 201, one 409).
+- `POST /dispatch/assignments` returns 201 (`@ApiCreatedResponse`); `GET /dispatch/unassigned` now
+  declares its paginated response; nullable DTO fields have explicit types, so the web types are right.
+- Web: loaders no longer set state synchronously inside effects (React lint rule); the assign
+  modal is remounted per parcel; pricing/zone tables show a loading state.
+- Removed the accidental `package-lock.json` (the repo uses pnpm). The pricing integration test's
+  island-wide rule is created inactive so it doesn't change other suites' estimates.
+- **Follow-ups:** the seeded colombo→kandy SMALL 1.5 kg fee is now 55000 (weight rounds up) but
+  M4's seed parcels and some tests use 52500; zone/rule audit entries are written outside the
+  change's transaction; `validFrom <= validTo` isn't checked; add 401/403 cases for the admin
+  zone/rule endpoints.

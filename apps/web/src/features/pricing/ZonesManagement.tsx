@@ -30,10 +30,15 @@ export function ZonesManagement() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string>();
 
+  /** For buttons and after edits: show the spinner, then reload. */
   async function loadZones() {
     setLoading(true);
     setError(undefined);
+    await fetchZones();
+  }
 
+  /** Fetches and stores the data. Only sets state after the request, so effects can call it. */
+  async function fetchZones() {
     const { data, error: apiErr } = await api.GET('/api/v1/admin/zones');
     setLoading(false);
 
@@ -46,7 +51,7 @@ export function ZonesManagement() {
   }
 
   useEffect(() => {
-    void loadZones();
+    void fetchZones();
   }, []);
 
   function openCreateModal() {
@@ -216,11 +221,15 @@ export function ZonesManagement() {
         rows={zones}
         rowKey={(z) => z.id}
         empty={
-          <EmptyState
-            title="No delivery zones"
-            description="No delivery zones have been configured yet."
-            action={<Button onClick={openCreateModal}>Create First Zone</Button>}
-          />
+          loading ? (
+            <p className="p-4 text-sm text-muted">Loading…</p>
+          ) : (
+            <EmptyState
+              title="No delivery zones"
+              description="No delivery zones have been configured yet."
+              action={<Button onClick={openCreateModal}>Create First Zone</Button>}
+            />
+          )
         }
       />
 

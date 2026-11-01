@@ -61,6 +61,8 @@ describe('DispatchService (Unit)', () => {
         updateMany: jest.fn(),
         count: jest.fn(),
       },
+      // Row locks (SELECT … FOR UPDATE) taken at the start of assign().
+      $queryRaw: jest.fn().mockResolvedValue([]),
       $transaction: jest.fn(async (cb) => cb(prismaMock)),
     };
 

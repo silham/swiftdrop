@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Roles, type AuthUser } from '../../common/auth';
 import { DispatchService } from './dispatch.service';
 import {
@@ -7,6 +7,7 @@ import {
   CourierWorkloadDto,
   CreateAssignmentDto,
   ListUnassignedQuery,
+  UnassignedParcelPageDto,
 } from './dto/dispatch.dto';
 
 /** Owner: M7 */
@@ -18,13 +19,14 @@ export class DispatchController {
 
   @Get('unassigned')
   @ApiOperation({ summary: 'List parcels awaiting courier assignment' })
+  @ApiOkResponse({ type: UnassignedParcelPageDto })
   unassigned(@Query() q: ListUnassignedQuery) {
     return this.dispatch.listUnassigned(q);
   }
 
   @Post('assignments')
   @ApiOperation({ summary: 'Assign a parcel to a courier' })
-  @ApiOkResponse({ type: AssignmentDto })
+  @ApiCreatedResponse({ type: AssignmentDto })
   assign(@CurrentUser() user: AuthUser, @Body() dto: CreateAssignmentDto) {
     return this.dispatch.assign(user, dto);
   }

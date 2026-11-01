@@ -59,10 +59,15 @@ export function PricingRulesManagement() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string>();
 
+  /** For buttons and after edits: show the spinner, then reload. */
   async function loadData() {
     setLoading(true);
     setError(undefined);
+    await fetchData();
+  }
 
+  /** Fetches and stores the data. Only sets state after the request, so effects can call it. */
+  async function fetchData() {
     const [rulesRes, zonesRes] = await Promise.all([
       api.GET('/api/v1/admin/pricing-rules'),
       api.GET('/api/v1/admin/zones'),
@@ -70,19 +75,20 @@ export function PricingRulesManagement() {
 
     setLoading(false);
 
-    if (rulesRes.error || !rulesRes.data) {
-      setError(errorMessage(rulesRes.error, 'Failed to load pricing rules'));
+    const { data: ruleData, error: ruleError } = rulesRes;
+    if (!ruleData) {
+      setError(errorMessage(ruleError, 'Failed to load pricing rules'));
       return;
     }
 
-    setRules(rulesRes.data);
+    setRules(ruleData);
     if (zonesRes.data) {
       setZones(zonesRes.data);
     }
   }
 
   useEffect(() => {
-    void loadData();
+    void fetchData();
   }, []);
 
   function openCreateModal() {
@@ -292,11 +298,15 @@ export function PricingRulesManagement() {
         rows={rules}
         rowKey={(r) => r.id}
         empty={
-          <EmptyState
-            title="No pricing rules found"
-            description="No delivery pricing rules configured. At least one island-wide rule is recommended."
-            action={<Button onClick={openCreateModal}>Create Default Rule</Button>}
-          />
+          loading ? (
+            <p className="p-4 text-sm text-muted">Loading…</p>
+          ) : (
+            <EmptyState
+              title="No pricing rules found"
+              description="No delivery pricing rules configured. At least one island-wide rule is recommended."
+              action={<Button onClick={openCreateModal}>Create Default Rule</Button>}
+            />
+          )
         }
       />
 

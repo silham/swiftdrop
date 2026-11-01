@@ -103,7 +103,12 @@ export class DispatchService {
    */
   async assign(actor: AuthUser, dto: CreateAssignmentDto): Promise<AssignmentDto> {
     return this.prisma.$transaction(async (tx) => {
-      // 1. Lock parcel and verify existence and status
+      // 1. Lock the parcel row, then the courier's profile row (always in this order, so two
+      // assigns can't deadlock). Concurrent assigns for the same parcel or courier now run one
+      // after the other, so the "already assigned" and capacity checks below can't both pass.
+      await tx.$queryRaw`SELECT id FROM parcels WHERE id = ${dto.parcelId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM courier_profiles WHERE "userId" = ${dto.courierId} FOR UPDATE`;
+
       const parcel = await tx.parcel.findUnique({
         where: { id: dto.parcelId },
       });

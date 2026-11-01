@@ -101,7 +101,7 @@ describe('Dispatch Module (Integration)', () => {
           parcelId: parcel.id,
           courierId: demoCourier.id,
         })
-        .expect(200);
+        .expect(201);
 
       expect(res.body).toMatchObject({
         parcelId: parcel.id,
@@ -143,7 +143,7 @@ describe('Dispatch Module (Integration)', () => {
           parcelId: parcel.id,
           courierId: demoCourier.id,
         })
-        .expect(200);
+        .expect(201);
 
       // Attempt second assignment for same parcel
       const res = await request(t.http)
@@ -158,6 +158,38 @@ describe('Dispatch Module (Integration)', () => {
       expect(res.body.error).toMatchObject({
         code: ERROR_CODES.ALREADY_ASSIGNED,
       });
+    });
+
+    it('lets only one of two concurrent assignments of the same parcel succeed', async () => {
+      const parcel = await createTestParcel();
+      const cookie = await t.cookieFor('DISPATCHER');
+      const assign = () =>
+        request(t.http)
+          .post('/api/v1/dispatch/assignments')
+          .set('Cookie', cookie)
+          .send({ parcelId: parcel.id, courierId: demoCourier.id });
+
+      const results = await Promise.all([assign(), assign()]);
+
+      expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+      expect(
+        await t.prisma.courierAssignment.count({
+          where: { parcelId: parcel.id, status: 'ACTIVE' },
+        }),
+      ).toBe(1);
+    });
+
+    it('requires a session (401) and rejects the MERCHANT role (403)', async () => {
+      const parcel = await createTestParcel();
+      const body = { parcelId: parcel.id, courierId: demoCourier.id };
+
+      await request(t.http).post('/api/v1/dispatch/assignments').send(body).expect(401);
+      await request(t.http).get('/api/v1/dispatch/unassigned').expect(401);
+      await request(t.http)
+        .post('/api/v1/dispatch/assignments')
+        .set('Cookie', await t.cookieFor('MERCHANT'))
+        .send(body)
+        .expect(403);
     });
 
     it('rejects assignment attempts from unauthorized roles (CUSTOMER, COURIER)', async () => {
@@ -185,7 +217,7 @@ describe('Dispatch Module (Integration)', () => {
           parcelId: parcel.id,
           courierId: demoCourier.id,
         })
-        .expect(200);
+        .expect(201);
 
       const assignmentId = assignRes.body.id;
 
