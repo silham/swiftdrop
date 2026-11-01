@@ -18,10 +18,12 @@ describe('Partner API Engine (/api/v1/merchant/*) — Task Group 3 (integration)
   let rawKeyPending: string;
 
   // Seeded parcels
-  const trackingParcelA = 'SD900000001';
-  const trackingParcelB = 'SD900000002';
-  const merchantRefA = 'ORDER-REF-AAA';
-  const merchantRefB = 'ORDER-REF-BBB';
+  // Unique per run: the test DB is shared by every suite (bookings also seeds SD9000000xx).
+  const runId = crypto.randomInt(1_000_000, 9_999_999);
+  const trackingParcelA = `SD95${runId}`;
+  const trackingParcelB = `SD96${runId}`;
+  const merchantRefA = `ORDER-REF-AAA-${runId}`;
+  const merchantRefB = `ORDER-REF-BBB-${runId}`;
 
   beforeAll(async () => {
     t = await createTestApp();
@@ -143,6 +145,9 @@ describe('Partner API Engine (/api/v1/merchant/*) — Task Group 3 (integration)
   });
 
   afterAll(async () => {
+    await t.prisma.parcel.deleteMany({
+      where: { trackingNumber: { in: [trackingParcelA, trackingParcelB] } },
+    });
     await t.close();
   });
 

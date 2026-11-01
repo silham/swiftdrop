@@ -149,3 +149,21 @@ deliveries live. M8 may add a `webhook-echo` dev service.
   - Implemented `/merchant/webhooks` (`WebhooksManager.tsx`): endpoint management, single-view raw secret display, secret rotation, and delivery attempts inspection.
   - Implemented `/admin/merchants` (`AdminMerchantsView.tsx`): admin approval queue with approve, reject (with reason modal), and suspend controls.
   - Removed all `NotImplemented` placeholders from M5 web routes.
+- **Review fixes (merge of PR #7):**
+  - Webhook secrets are now stored in the format M8's worker reads (`<iv>:<tag>:<ciphertext>`, base64
+    parts). The old hex format made every delivery fail with "signing secret could not be
+    decrypted". `test/merchants/merchant-tenancy.e2e-spec.ts` decrypts API-written secrets with the
+    worker's own `decryptSecret`, also after rotation.
+  - SSRF guard (`webhook-url.ts`): in production, webhook URLs must resolve to public addresses;
+    loopback, private, link-local, CGNAT, `localhost`, `*.internal`/`*.local` and single-label
+    hosts (docker service names) are rejected. Dev/test still allow them for `webhook-echo`.
+  - `GET /merchants/me/parcels?status=` uses a validated query DTO (it returned 400 for every
+    filtered request, and a bad value would have been a 500).
+  - New negative tests: another merchant gets 404 for A's keys and webhooks, a suspended
+    merchant's key gets 403, a session cookie without `X-Api-Key` gets 401 on the partner API,
+    other roles get 403 on the portal API, orders are scoped to the caller.
+  - Partner-API test fixtures use unique tracking numbers per run (they collided with bookings').
+- **Known gaps:** two truly simultaneous duplicate orders both get 201 (same parcel, nothing is
+  created twice), because `ParcelsService.create` returns the existing parcel without saying so.
+  Webhook attempts are capped at 50 instead of paginated. No `@Throttle` on registration or the
+  partner API yet. `UsersService.createUserInTransaction` was added in M2's file; M2 to review.

@@ -4,10 +4,16 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 12 bytes standard for GCM
 
 /**
+ * Format shared with M8's worker (apps/worker/src/consumers/webhooks/secret-crypto.ts), which
+ * decrypts these secrets to sign webhooks: `<iv>:<authTag>:<ciphertext>`, each part **base64**.
+ * Changing it means no webhook can be signed. test/merchants checks both sides agree.
+ */
+
+/**
  * Encrypts a webhook signing secret with AES-256-GCM.
  * @param secret The raw plaintext secret
  * @param keyBase64 base64-encoded 32-byte encryption key
- * @returns Serialized format: `<iv_hex>:<authTag_hex>:<ciphertext_hex>`
+ * @returns Serialized format: `<iv>:<authTag>:<ciphertext>` (base64 parts)
  */
 export function encryptWebhookSecret(secret: string, keyBase64: string): string {
   const key = Buffer.from(keyBase64, 'base64');
@@ -20,13 +26,13 @@ export function encryptWebhookSecret(secret: string, keyBase64: string): string 
   const ciphertext = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
   const authTag = cipher.getAuthTag();
 
-  return `${iv.toString('hex')}:${authTag.toString('hex')}:${ciphertext.toString('hex')}`;
+  return [iv, authTag, ciphertext].map((b) => b.toString('base64')).join(':');
 }
 
 /**
  * Decrypts a webhook signing secret encrypted with AES-256-GCM.
  * Exported so both API and M8 webhooks worker consumer can decrypt secrets.
- * @param secretEncrypted Serialized string: `<iv_hex>:<authTag_hex>:<ciphertext_hex>`
+ * @param secretEncrypted Serialized string: `<iv>:<authTag>:<ciphertext>` (base64 parts)
  * @param keyBase64 base64-encoded 32-byte encryption key
  */
 export function decryptWebhookSecret(secretEncrypted: string, keyBase64: string): string {
@@ -40,10 +46,7 @@ export function decryptWebhookSecret(secretEncrypted: string, keyBase64: string)
     throw new Error('Invalid encrypted webhook secret format');
   }
 
-  const [ivHex, authTagHex, cipherHex] = parts;
-  const iv = Buffer.from(ivHex, 'hex');
-  const authTag = Buffer.from(authTagHex, 'hex');
-  const ciphertext = Buffer.from(cipherHex, 'hex');
+  const [iv, authTag, ciphertext] = parts.map((p) => Buffer.from(p, 'base64'));
 
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);

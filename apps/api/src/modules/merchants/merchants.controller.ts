@@ -7,6 +7,7 @@ import {
   CreatedApiKeyDto,
   CreateWebhookDto,
   ListMerchantsQuery,
+  ListMyMerchantParcelsQuery,
   MerchantDto,
   RegisterMerchantDto,
   RejectMerchantDto,
@@ -14,7 +15,6 @@ import {
   WebhookDto,
   WebhookWithSecretDto,
 } from './dto/merchant.dto';
-import { PaginationQuery } from '../../common/pagination/pagination';
 import { MerchantsService } from './merchants.service';
 
 /** Owner: M5 — merchant PORTAL (cookie session). Partner API lives in merchant-api (X-Api-Key). */
@@ -98,12 +98,8 @@ export class MerchantsController {
 
   @Get('me/parcels')
   @ApiOperation({ summary: 'List parcels for current merchant (session-based)' })
-  myParcels(
-    @CurrentUser() user: AuthUser,
-    @Query() q: PaginationQuery,
-    @Query('status') status?: string,
-  ) {
-    return this.merchants.getMyParcels(user, q, status);
+  myParcels(@CurrentUser() user: AuthUser, @Query() q: ListMyMerchantParcelsQuery) {
+    return this.merchants.getMyParcels(user, q, q.status);
   }
 
   @Get('me/stats')

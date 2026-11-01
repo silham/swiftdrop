@@ -11,6 +11,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { PARCEL_STATUSES, type ParcelStatus } from '@swiftdrop/contracts';
 import { PaginationQuery } from '../../../common/pagination/pagination';
 
 export const MERCHANT_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'] as const;
@@ -28,10 +29,10 @@ export class MerchantDto {
   @ApiProperty() id: string;
   @ApiProperty() businessName: string;
   @ApiProperty() contactEmail: string;
-  @ApiPropertyOptional({ nullable: true }) contactPhone?: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) contactPhone?: string | null;
   @ApiProperty({ enum: MERCHANT_STATUSES }) status: string;
-  @ApiPropertyOptional({ nullable: true }) approvedAt?: Date | null;
-  @ApiPropertyOptional({ nullable: true }) approvedById?: string | null;
+  @ApiPropertyOptional({ type: Date, nullable: true }) approvedAt?: Date | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) approvedById?: string | null;
   @ApiProperty() createdAt: Date;
 }
 
@@ -43,8 +44,8 @@ export class ApiKeyDto {
   @ApiProperty() id: string;
   @ApiProperty() name: string;
   @ApiProperty({ example: 'sd_live_ab12cd34' }) prefix: string;
-  @ApiPropertyOptional({ nullable: true }) lastUsedAt: Date | null;
-  @ApiPropertyOptional({ nullable: true }) revokedAt: Date | null;
+  @ApiPropertyOptional({ type: Date, nullable: true }) lastUsedAt: Date | null;
+  @ApiPropertyOptional({ type: Date, nullable: true }) revokedAt: Date | null;
   @ApiProperty() createdAt: Date;
 }
 
@@ -87,6 +88,14 @@ export class ListMerchantsQuery extends PaginationQuery {
   @IsOptional()
   @IsIn(MERCHANT_STATUSES)
   status?: string;
+}
+
+/** GET /merchants/me/parcels: pagination plus an optional, validated status filter. */
+export class ListMyMerchantParcelsQuery extends PaginationQuery {
+  @ApiPropertyOptional({ enum: PARCEL_STATUSES })
+  @IsOptional()
+  @IsIn(PARCEL_STATUSES)
+  status?: ParcelStatus;
 }
 
 export class RejectMerchantDto {

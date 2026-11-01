@@ -26,9 +26,10 @@ describe('Webhook Secret Crypto (AES-256-GCM)', () => {
     const encrypted = encryptWebhookSecret(rawSecret, validKey);
     const [iv, authTag, cipher] = encrypted.split(':');
 
-    // Tamper with the ciphertext
-    const tamperedCipher = cipher.slice(0, -2) + (cipher.endsWith('0') ? '1' : '0');
-    const tampered = `${iv}:${authTag}:${tamperedCipher}`;
+    // Tamper with the ciphertext: flip one bit of the first byte
+    const bytes = Buffer.from(cipher, 'base64');
+    bytes[0] ^= 0x01;
+    const tampered = `${iv}:${authTag}:${bytes.toString('base64')}`;
 
     expect(() => decryptWebhookSecret(tampered, validKey)).toThrow();
   });
@@ -37,5 +38,12 @@ describe('Webhook Secret Crypto (AES-256-GCM)', () => {
     expect(() => decryptWebhookSecret('invalid_string_no_colons', validKey)).toThrow(
       'Invalid encrypted webhook secret format',
     );
+  });
+
+  it('writes the base64 format the webhooks worker reads', () => {
+    const encrypted = encryptWebhookSecret('whsec_test', validKey);
+    const [iv, tag] = encrypted.split(':').map((p) => Buffer.from(p, 'base64'));
+    expect(iv).toHaveLength(12);
+    expect(tag).toHaveLength(16);
   });
 });

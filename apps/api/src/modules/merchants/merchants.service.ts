@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { ERROR_CODES, type Paginated } from '@swiftdrop/contracts';
+import { ERROR_CODES, type Paginated, type ParcelStatus } from '@swiftdrop/contracts';
 import type { ApiKey, Merchant, MerchantStatus, Prisma, WebhookEndpoint } from '@swiftdrop/db';
 import type { AuthUser } from '../../common/auth';
 import { AppError, notFound } from '../../common/errors/app-error';
@@ -11,6 +11,7 @@ import { PrismaService } from '../../infra/prisma';
 import { AuditService } from '../audit';
 import { UsersService } from '../users';
 import { encryptWebhookSecret } from './crypto';
+import { isInternalHostname, resolvesToNonPublicIp } from './webhook-url';
 import type {
   ApiKeyDto,
   CreateApiKeyDto,
@@ -80,7 +81,7 @@ export class MerchantsService {
     return merchant;
   }
 
-  private validateWebhookUrl(urlStr: string): void {
+  private async validateWebhookUrl(urlStr: string): Promise<void> {
     let parsed: URL;
     try {
       parsed = new URL(urlStr);
@@ -104,6 +105,19 @@ export class MerchantsService {
       throw new AppError(
         ERROR_CODES.VALIDATION_FAILED,
         'Webhook URL must use HTTPS in production',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // SSRF: in production, refuse internal targets, by name and by what the name resolves to.
+    // Dev/test allow them so the local webhook-echo demo endpoint works.
+    if (
+      this.config.NODE_ENV === 'production' &&
+      (isInternalHostname(parsed.hostname) || (await resolvesToNonPublicIp(parsed.hostname)))
+    ) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_FAILED,
+        'Webhook URL must point to a public internet address',
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -269,7 +283,7 @@ export class MerchantsService {
   async createWebhook(user: AuthUser, dto: CreateWebhookDto): Promise<WebhookWithSecretDto> {
     const merchant = await this.getMerchantForUser(user.id);
 
-    this.validateWebhookUrl(dto.url);
+    await this.validateWebhookUrl(dto.url);
 
     const rawSecret = crypto.randomBytes(32).toString('hex');
     const secretEncrypted = encryptWebhookSecret(rawSecret, this.config.WEBHOOK_SECRET_ENC_KEY);
@@ -299,7 +313,7 @@ export class MerchantsService {
     if (!existing) throw notFound('WebhookEndpoint');
 
     if (dto.url) {
-      this.validateWebhookUrl(dto.url);
+      await this.validateWebhookUrl(dto.url);
     }
 
     const updated = await this.prisma.webhookEndpoint.update({
@@ -368,11 +382,11 @@ export class MerchantsService {
     });
   }
 
-  async getMyParcels(user: AuthUser, q: PaginationQuery, status?: string) {
+  async getMyParcels(user: AuthUser, q: PaginationQuery, status?: ParcelStatus) {
     const merchant = await this.getMerchantForUser(user.id);
     const where: Prisma.ParcelWhereInput = {
       merchantId: merchant.id,
-      ...(status ? { status: status as any } : {}),
+      ...(status ? { status } : {}),
     };
     const [parcels, total] = await Promise.all([
       this.prisma.parcel.findMany({
