@@ -1,16 +1,19 @@
-import { NotImplemented, PageHeader } from '@/components/ui';
+import { PageHeader } from '@/components/ui';
+import { UnassignedQueue } from '@/features/dispatch';
 
 export const metadata = { title: 'Unassigned parcels' };
 
 /**
- * Owner: M7. TODO(M7): GET /api/v1/dispatch/unassigned + POST /api/v1/dispatch/assignments.
- * Put components in src/features/<your-feature>/ and keep this file thin.
+ * Owner: M7 — Dispatch portal: unassigned parcels queue and courier assignment.
  */
 export default async function DispatchPage() {
   return (
     <>
-      <PageHeader title={'Unassigned parcels'} description="Assign parcels to couriers" />
-      <NotImplemented owner="M7" doc="docs/members/M07-dispatch-admin-pricing.md" />
+      <PageHeader
+        title="Unassigned Parcels"
+        description="Monitor booked parcels awaiting courier assignment and allocate fleet resources."
+      />
+      <UnassignedQueue />
     </>
   );
 }

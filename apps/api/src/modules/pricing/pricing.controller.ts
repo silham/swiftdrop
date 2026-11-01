@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Public, Roles } from '../../common/auth';
+import { CurrentUser, Public, Roles, type AuthUser } from '../../common/auth';
 import {
   CreatePricingRuleDto,
   CreateZoneDto,
@@ -44,14 +44,14 @@ export class PricingAdminController {
 
   @Post('zones')
   @ApiOkResponse({ type: ZoneDto })
-  createZone(@Body() dto: CreateZoneDto) {
-    return this.pricing.createZone(dto);
+  createZone(@CurrentUser() user: AuthUser, @Body() dto: CreateZoneDto) {
+    return this.pricing.createZone(dto, user);
   }
 
   @Patch('zones/:id')
   @ApiOkResponse({ type: ZoneDto })
-  updateZone(@Param('id') id: string, @Body() dto: UpdateZoneDto) {
-    return this.pricing.updateZone(id, dto);
+  updateZone(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateZoneDto) {
+    return this.pricing.updateZone(id, dto, user);
   }
 
   @Get('pricing-rules')
@@ -62,13 +62,17 @@ export class PricingAdminController {
 
   @Post('pricing-rules')
   @ApiOkResponse({ type: PricingRuleDto })
-  createRule(@Body() dto: CreatePricingRuleDto) {
-    return this.pricing.createRule(dto);
+  createRule(@CurrentUser() user: AuthUser, @Body() dto: CreatePricingRuleDto) {
+    return this.pricing.createRule(dto, user);
   }
 
   @Patch('pricing-rules/:id')
   @ApiOkResponse({ type: PricingRuleDto })
-  updateRule(@Param('id') id: string, @Body() dto: UpdatePricingRuleDto) {
-    return this.pricing.updateRule(id, dto);
+  updateRule(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: UpdatePricingRuleDto,
+  ) {
+    return this.pricing.updateRule(id, dto, user);
   }
 }
