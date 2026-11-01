@@ -16,3 +16,18 @@ export async function markProcessed(
   });
   return res.count === 1;
 }
+
+/**
+ * Read-only check. Use it when the "processed" mark may only be written AFTER the side effect
+ * succeeded, so a transient failure can be retried (see the notifications and webhooks consumers).
+ */
+export async function isProcessed(
+  prisma: PrismaClient,
+  consumer: string,
+  eventId: string,
+): Promise<boolean> {
+  const row = await prisma.processedEvent.findUnique({
+    where: { consumer_eventId: { consumer, eventId } },
+  });
+  return row !== null;
+}

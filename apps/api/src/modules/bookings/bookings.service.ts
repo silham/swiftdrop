@@ -1,10 +1,19 @@
 import { Injectable } from '@nestjs/common';
+import type { Paginated } from '@swiftdrop/contracts';
+import type { Prisma } from '@swiftdrop/db';
 import type { Readable } from 'node:stream';
 import type { AuthUser } from '../../common/auth';
-import { notImplemented } from '../../common/errors/app-error';
+import { notFound } from '../../common/errors/app-error';
+import { paginated } from '../../common/pagination/pagination';
 import { PrismaService } from '../../infra/prisma';
 import { ParcelsService, type ParcelDto } from '../parcels';
-import type { CreateBookingDto, ListMyParcelsQuery } from './dto/booking.dto';
+import { toParcelDto } from './bookings.mapper';
+import { createReceiptPdf } from './bookings.receipt';
+import type {
+  CreateBookingDto,
+  CustomerParcelDetailDto,
+  ListMyParcelsQuery,
+} from './dto/booking.dto';
 
 /**
  * Customer-facing booking flow. Delegates creation to ParcelsService (M4) and fees to
@@ -17,21 +26,64 @@ export class BookingsService {
     private readonly parcels: ParcelsService,
   ) {}
 
-  async create(_user: AuthUser, _dto: CreateBookingDto): Promise<ParcelDto> {
-    notImplemented('M3'); // TODO(M3): this.parcels.create({ ...dto, source: 'CUSTOMER', customerId: user.id }, user.role)
+  async create(user: AuthUser, dto: CreateBookingDto): Promise<ParcelDto> {
+    const parcel = await this.parcels.create(
+      { ...dto, source: 'CUSTOMER', customerId: user.id },
+      user.role,
+    );
+    return toParcelDto(parcel);
   }
 
-  async listMine(_user: AuthUser, _q: ListMyParcelsQuery) {
-    notImplemented('M3');
+  async listMine(user: AuthUser, q: ListMyParcelsQuery): Promise<Paginated<ParcelDto>> {
+    const where: Prisma.ParcelWhereInput = {
+      customerId: user.id,
+      ...(q.status ? { status: q.status } : {}),
+    };
+    const [parcels, total] = await this.prisma.$transaction([
+      this.prisma.parcel.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: q.skip,
+        take: q.take,
+      }),
+      this.prisma.parcel.count({ where }),
+    ]);
+
+    return paginated(parcels.map(toParcelDto), total, q);
   }
 
   /** 404 (not 403) when the parcel belongs to someone else — don't leak existence. */
-  async getMine(_user: AuthUser, _id: string): Promise<ParcelDto> {
-    notImplemented('M3');
+  async getMine(user: AuthUser, id: string): Promise<CustomerParcelDetailDto> {
+    const parcel = await this.prisma.parcel.findFirst({
+      where: { id, customerId: user.id },
+      include: {
+        statusHistory: {
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        },
+      },
+    });
+    if (!parcel) throw notFound('Parcel');
+
+    return {
+      ...toParcelDto(parcel),
+      history: parcel.statusHistory.map((entry) => ({
+        status: entry.toStatus,
+        at: entry.createdAt,
+        reason: entry.reason,
+      })),
+    };
   }
 
   /** PDF receipt via pdfkit. */
-  async receiptPdf(_user: AuthUser, _id: string): Promise<{ filename: string; stream: Readable }> {
-    notImplemented('M3');
+  async receiptPdf(user: AuthUser, id: string): Promise<{ filename: string; stream: Readable }> {
+    const parcel = await this.prisma.parcel.findFirst({
+      where: { id, customerId: user.id },
+    });
+    if (!parcel) throw notFound('Parcel');
+
+    return {
+      filename: `swiftdrop-receipt-${parcel.trackingNumber}.pdf`,
+      stream: createReceiptPdf(parcel),
+    };
   }
 }

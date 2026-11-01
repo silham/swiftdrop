@@ -113,4 +113,42 @@ Reliable asynchronous integration, which the assignment explicitly requires. You
 
 ## Status / notes
 
-_Update as you go._
+Implemented (see `docs/conventions/events.md` for the behaviour):
+
+- Outbox relay (`FOR UPDATE SKIP LOCKED`, ordered, stops the batch on failure).
+- Retry queues + bounded backoff + DLQ in `topology.ts` / `RabbitMqService.consume` (`TransientError`, `x-attempt`).
+- Notifications consumer (customer + recipient emails, mock SMS, masked `NotificationLog`, per-target idempotency).
+- Webhooks consumer (HMAC signing, timeout, one `WebhookAttempt` per try, per-endpoint idempotency, DEAD after the last retry).
+- Ops API: `GET /admin/ops/outbox`, `GET /admin/ops/webhook-attempts`, `POST /admin/ops/webhook-attempts/:id/retry` (audited), and the `/admin/ops` page.
+- Dev helpers: `apps/worker/scripts/webhook-echo.ts` and `demo-event.ts`.
+- Tests: unit (backoff, signature, secret crypto, masking, templates, `isRetryable`) and integration in `apps/api/test/events/`
+  (relay, retry/DLQ, consumers incl. duplicate / unavailable endpoint / 4xx / provider error, the status change → notification + webhook
+  flow, ops endpoints with negative authorization cases).
+
+Decisions to know about:
+
+- Webhook secret format `<iv>:<tag>:<ciphertext>` (base64, AES-256-GCM) is documented in `events.md`; M5 must use `encryptSecret`
+  from `apps/worker/src/consumers/webhooks/secret-crypto.ts` (or the same format) when creating/rotating secrets.
+- A 4xx from a merchant is recorded `FAILED` and acknowledged (not dead-lettered); only exhausted retries become `DEAD` + DLQ.
+- A notification for a parcel that no longer exists is skipped with a warning.
+- The integration tests load the worker sources at runtime (`apps/api/test/events/worker.ts`) because `apps/api/tsconfig.json`
+  has `rootDir = apps/api`.
+
+Not done / for others:
+
+- `webhook-echo` as a compose service under the `dev` profile and a seeded demo endpoint (needs M10 for `compose.yaml` and M5 for the seed).
+- SSRF: the webhooks consumer only checks the URL scheme. An approved merchant could point an endpoint at an internal
+  host (`postgres:5432`, `169.254.169.254`, …) and read the result in the attempts list. M5 should reject private,
+  loopback and link-local hosts when endpoints are saved; resolving and re-checking in the consumer would be defence in depth.
+- `encryptSecret` and the `x-target-endpoint` header name live in `apps/worker`, which `apps/api` cannot import. Moving them
+  to `packages/contracts` (with M1) would let M5 reuse them.
+
+Review fixes (merge):
+
+- `GET /admin/ops/queues` (added in this PR, also shows DLQ depth) opens a short-lived channel per lookup, so the first call
+  after boot and calls after a missing queue no longer return `null`. The test now requires numeric depths.
+- Notification idempotency keys include the target role (`customer:` / `recipient:` + masked address), so two addresses
+  that mask the same way are both emailed.
+- Operator retry only works on the newest attempt for an endpoint + event, never while an automatic retry is scheduled,
+  and only if the webhooks queue exists (the default exchange would drop the message). Publishing has a 10 s timeout.
+- The `.gitignore` change was dropped (M10's file; the unanchored `documents/` pattern was too broad).
