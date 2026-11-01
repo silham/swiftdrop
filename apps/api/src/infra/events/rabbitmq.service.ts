@@ -29,6 +29,12 @@ export class RabbitMqService implements OnModuleInit, OnModuleDestroy {
       json: false,
       setup: (ch: Channel) => ch.assertExchange(EVENTS_EXCHANGE, 'topic', { durable: true }),
     });
+    // A setup step can fail, e.g. when the app shuts down while the channel is still being set up.
+    // The wrapper reports that as an 'error' event; without a listener Node treats it as an
+    // unhandled error and crashes the process (or, in tests, whichever suite runs next).
+    this.channel.on('error', (err: Error) =>
+      this.logger.warn(`RabbitMQ channel setup failed: ${err.message}`),
+    );
   }
 
   isConnected(): boolean {
