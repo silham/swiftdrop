@@ -18,7 +18,7 @@ team**.
 - `apps/api/src/common/auth/` (JwtAuthGuard, RolesGuard, decorators, TokenService); M1 built it and hands it over in Week 1
 - `apps/api/test/auth/`, `apps/api/test/auth-matrix/`
 - `packages/db/prisma/schema/auth.prisma`, `packages/db/seed/00-users.ts`
-- Web: `src/app/(public)/login/`, `src/app/(public)/register/`, `src/app/admin/users/`,
+- Web: `src/app/(auth)/login/`, `src/app/(auth)/register/`, `src/app/admin/users/`,
   `src/features/auth/`, `src/proxy.ts`, `src/lib/auth/`
 
 ## Do not edit (ask the owner)

@@ -21,7 +21,7 @@ You also own the merchant dashboard, API-key lifecycle, webhook configuration an
 
 - API: `apps/api/src/modules/merchants/` (portal + admin approval), `apps/api/src/modules/merchant-api/` (partner API, `ApiKeyGuard`), `apps/api/test/merchants/`
 - `packages/db/prisma/schema/merchant.prisma`, `packages/db/seed/20-merchants.ts`
-- Web: `src/app/merchant/**`, `src/app/(public)/merchant-signup/`, `src/app/admin/merchants/`, `src/features/merchant/`
+- Web: `src/app/merchant/**`, `src/app/(auth)/merchant-signup/`, `src/app/admin/merchants/`, `src/features/merchant/`
 - Docs: `docs/partner-api.md` (create it; partner-facing guide)
 
 ## Interfaces you provide

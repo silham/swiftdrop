@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
-import { Alert, Button, Card } from '@/components/ui';
+import { Alert, Button, Card, CardBody, CardHeader } from '@/components/ui';
 
 export type ProofPhotoState =
   | { status: 'loading' }
@@ -80,7 +80,7 @@ export function ProofPhotoContent({
       width={1200}
       height={900}
       unoptimized
-      className="max-h-[32rem] w-full rounded-md border border-line bg-canvas object-contain"
+      className="max-h-[32rem] w-full rounded-lg border border-line bg-surface-2 object-contain"
     />
   );
 }
@@ -121,19 +121,21 @@ export function ProofOfDeliveryPhoto({
   }, [attempt, parcelId]);
 
   return (
-    <Card className="mt-5">
-      <div className="mb-4">
-        <h2 className="font-semibold">Proof of delivery</h2>
-        <p className="mt-1 text-sm text-muted">Photo recorded when this parcel was delivered.</p>
-      </div>
-      <ProofPhotoContent
-        state={state}
-        trackingNumber={trackingNumber}
-        onRetry={() => {
-          setState({ status: 'loading' });
-          setAttempt((current) => current + 1);
-        }}
+    <Card flush>
+      <CardHeader
+        title="Proof of delivery"
+        description="Photo recorded when this parcel was delivered."
       />
+      <CardBody>
+        <ProofPhotoContent
+          state={state}
+          trackingNumber={trackingNumber}
+          onRetry={() => {
+            setState({ status: 'loading' });
+            setAttempt((current) => current + 1);
+          }}
+        />
+      </CardBody>
     </Card>
   );
 }

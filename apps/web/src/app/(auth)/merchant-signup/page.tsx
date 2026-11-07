@@ -1,5 +1,3 @@
-import Link from 'next/link';
-import { Card } from '@/components/ui';
 import { MerchantSignupForm } from '@/features/merchant/MerchantSignupForm';
 
 export const metadata = { title: 'Merchant sign-up' };
@@ -7,14 +5,21 @@ export const metadata = { title: 'Merchant sign-up' };
 /** Owner: M5 — merchant registration (POST /api/v1/merchants/register); account starts PENDING. */
 export default function MerchantSignupPage() {
   return (
-    <main className="mx-auto max-w-md px-4 py-16">
-      <Link href="/" className="text-lg font-bold text-brand">
-        SwiftDrop
-      </Link>
-      <Card className="mt-6 space-y-4">
-        <h1 className="text-xl font-semibold">Become a SwiftDrop merchant</h1>
+    <>
+      <div className="mb-8">
+        <p className="mb-2 text-xs font-semibold tracking-wider text-brand uppercase">
+          Partner programme
+        </p>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">
+          Become a SwiftDrop merchant
+        </h1>
+        <p className="mt-1.5 text-sm text-muted">
+          Apply once. After an admin approves your business you get API keys and webhooks.
+        </p>
+      </div>
+      <div className="rounded-2xl border border-line bg-surface p-6 shadow-card sm:p-8">
         <MerchantSignupForm />
-      </Card>
-    </main>
+      </div>
+    </>
   );
 }

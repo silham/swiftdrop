@@ -1,17 +1,22 @@
 'use client';
 
+import { Package, Search } from 'lucide-react';
 import { useEffect, useState, type ComponentProps } from 'react';
 import {
   Alert,
-  Button,
+  Card,
+  CardFooter,
   EmptyState,
   Input,
-  Select,
+  Pagination,
+  Skeleton,
   StatusBadge,
   Table,
+  Tabs,
   type Column,
 } from '@/components/ui';
 import { errorMessage } from '@/lib/api/errors';
+import { formatDate, formatMoney } from '@/lib/format';
 
 type ParcelStatus = ComponentProps<typeof StatusBadge>['status'];
 
@@ -34,7 +39,7 @@ interface OrdersResponse {
 }
 
 const STATUS_OPTIONS = [
-  { value: '', label: 'All Statuses' },
+  { value: '', label: 'All' },
   { value: 'CREATED', label: 'Created' },
   { value: 'PICKED_UP', label: 'Picked up' },
   { value: 'IN_TRANSIT', label: 'In transit' },
@@ -43,6 +48,7 @@ const STATUS_OPTIONS = [
   { value: 'FAILED', label: 'Failed' },
 ];
 
+/** Owner: M5. Paginated, status-filtered list of the merchant's partner-API parcels. */
 export function MerchantOrdersView() {
   const [orders, setOrders] = useState<ParcelItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -98,12 +104,12 @@ export function MerchantOrdersView() {
     );
   });
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
   const columns: Column<ParcelItem>[] = [
     {
       header: 'Tracking #',
-      cell: (row) => <span className="font-mono font-medium text-brand">{row.trackingNumber}</span>,
+      cell: (row) => (
+        <span className="font-mono text-[13px] font-medium text-ink">{row.trackingNumber}</span>
+      ),
     },
     {
       header: 'Your Reference',
@@ -113,7 +119,7 @@ export function MerchantOrdersView() {
     },
     {
       header: 'Recipient',
-      cell: (row) => <span className="font-medium">{row.recipientName}</span>,
+      cell: (row) => <span className="font-medium text-ink">{row.recipientName}</span>,
     },
     {
       header: 'Destination',
@@ -121,11 +127,9 @@ export function MerchantOrdersView() {
     },
     {
       header: 'Fee',
-      cell: (row) => (
-        <span className="font-mono text-xs">
-          {row.currency} {(row.feeCents / 100).toFixed(2)}
-        </span>
-      ),
+      headerClassName: 'text-right',
+      className: 'px-4 py-3 text-right tabular-nums',
+      cell: (row) => formatMoney(row.feeCents, row.currency),
     },
     {
       header: 'Status',
@@ -133,96 +137,86 @@ export function MerchantOrdersView() {
     },
     {
       header: 'Created',
-      cell: (row) => (
-        <span className="text-xs text-muted">{new Date(row.createdAt).toLocaleDateString()}</span>
-      ),
+      cell: (row) => <span className="text-xs text-muted">{formatDate(row.createdAt)}</span>,
     },
   ];
 
   return (
     <div className="space-y-4">
       {error && <Alert tone="error">{error}</Alert>}
-      {loading && (
-        <p className="text-sm text-muted" role="status">
-          Loading merchant orders...
-        </p>
-      )}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 items-center gap-2 max-w-sm">
-          <Input
-            placeholder="Search tracking #, reference, recipient..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Select
+      <Card flush>
+        <div className="flex flex-col gap-3 border-b border-line px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <Tabs
+            label="Filter orders by status"
             value={selectedStatus}
-            onChange={(e) => {
+            onChange={(value) => {
               setLoading(true);
-              setSelectedStatus(e.target.value);
+              setSelectedStatus(value);
               setPage(1);
             }}
-          >
-            {STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-      </div>
-
-      {!loading && (
-        <Table
-          columns={columns}
-          rows={filteredOrders}
-          rowKey={(row) => row.id}
-          empty={
-            <EmptyState
-              title="No orders found"
-              description={
-                selectedStatus || searchTerm
-                  ? 'Try adjusting your search filters or status selection.'
-                  : 'Orders submitted via your partner API will appear here.'
-              }
+            items={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          />
+          <div className="relative w-full lg:max-w-xs">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-subtle"
+              aria-hidden="true"
             />
-          }
-        />
-      )}
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-2">
-          <p className="text-xs text-muted">
-            Showing Page {page} of {totalPages} ({total} total orders)
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              className="px-3 py-1 text-xs"
-              disabled={page <= 1 || loading}
-              onClick={() => {
-                setLoading(true);
-                setPage((current) => Math.max(1, current - 1));
-              }}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="secondary"
-              className="px-3 py-1 text-xs"
-              disabled={page >= totalPages || loading}
-              onClick={() => {
-                setLoading(true);
-                setPage((current) => Math.min(totalPages, current + 1));
-              }}
-            >
-              Next
-            </Button>
+            <Input
+              aria-label="Search orders on this page"
+              placeholder="Search tracking #, reference, recipient..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
           </div>
         </div>
-      )}
+
+        {loading ? (
+          <div className="space-y-3 p-5" role="status" aria-label="Loading merchant orders...">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : (
+          <Table
+            bare
+            columns={columns}
+            rows={filteredOrders}
+            rowKey={(row) => row.id}
+            empty={
+              <div className="p-5">
+                <EmptyState
+                  compact
+                  className="border-0"
+                  icon={<Package />}
+                  title="No orders found"
+                  description={
+                    selectedStatus || searchTerm
+                      ? 'Try adjusting your search filters or status selection.'
+                      : 'Orders submitted via your partner API will appear here.'
+                  }
+                />
+              </div>
+            }
+          />
+        )}
+
+        {total > 0 && (
+          <CardFooter>
+            <Pagination
+              className="w-full"
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={(next) => {
+                setLoading(true);
+                setPage(next);
+              }}
+            />
+          </CardFooter>
+        )}
+      </Card>
     </div>
   );
 }

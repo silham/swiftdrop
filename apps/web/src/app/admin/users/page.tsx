@@ -23,6 +23,7 @@ export default async function AdminUsersPage() {
     <div className="space-y-6">
       <PageHeader
         title="User & Staff Management"
+        eyebrow="Accounts"
         description="Oversee user accounts, assign roles, create delivery staff, and manage operational permissions"
       />
       <AdminUsersDashboard initialUsers={initialUsers} initialTotal={initialTotal} />

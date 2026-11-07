@@ -1,16 +1,23 @@
 'use client';
 
+import { ArrowRight, Plus, Tag } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   Alert,
+  Badge,
   Button,
+  Card,
+  CardHeader,
   EmptyState,
   FormField,
   Input,
+  Modal,
   Select,
+  Skeleton,
   Table,
   type Column,
 } from '@/components/ui';
+import { formatMoney } from '@/lib/format';
 import { api } from '@/lib/api/client';
 import { errorMessage } from '@/lib/api/errors';
 import type { ParcelSize } from '@swiftdrop/contracts';
@@ -194,81 +201,66 @@ export function PricingRulesManagement() {
 
   const columns: Column<PricingRuleItem>[] = [
     {
-      header: 'Rule Name',
+      header: 'Rule',
       cell: (r) => (
-        <div>
-          <span className="font-semibold text-ink block">{r.name}</span>
-          <span className="text-xs text-muted">Priority: {r.priority}</span>
+        <div className="min-w-40">
+          <span className="block font-medium text-ink">{r.name}</span>
+          <span className="mt-1 flex items-center gap-2 text-xs text-muted">
+            <Badge tone={r.isActive ? 'success' : 'neutral'} dot>
+              {r.isActive ? 'Active' : 'Inactive'}
+            </Badge>
+            Priority {r.priority}
+          </span>
         </div>
       ),
     },
     {
-      header: 'Origin → Destination',
+      header: 'Route & size',
       cell: (r) => {
         const from = zones.find((z) => z.id === r.fromZoneId)?.name ?? r.fromZoneName;
         const to = zones.find((z) => z.id === r.toZoneId)?.name ?? r.toZoneName;
-        if (!r.fromZoneId && !r.toZoneId) {
-          return <span className="text-muted text-xs italic">Any (Island-wide)</span>;
-        }
         return (
-          <span className="text-sm font-medium">
-            {from ?? 'Any'} <span className="text-muted">→</span> {to ?? 'Any'}
-          </span>
+          <div className="min-w-36 space-y-1">
+            {!r.fromZoneId && !r.toZoneId ? (
+              <Badge tone="brand">Any (Island-wide)</Badge>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap text-ink">
+                {from ?? 'Any'}
+                <ArrowRight className="h-3.5 w-3.5 text-subtle" aria-label="to" />
+                {to ?? 'Any'}
+              </span>
+            )}
+            <span className="block text-xs text-muted">
+              {r.size ? `${r.size} parcels` : 'Any Size'}
+            </span>
+          </div>
         );
       },
     },
     {
-      header: 'Parcel Size',
+      header: 'Fees',
+      headerClassName: 'text-right',
+      className: 'px-4 py-3 text-right whitespace-nowrap',
       cell: (r) => (
-        <span className="text-xs">
-          {r.size ? (
-            <span className="inline-flex rounded-md bg-canvas px-2 py-0.5 border border-line font-medium">
-              {r.size}
-            </span>
-          ) : (
-            <span className="text-muted italic">Any Size</span>
-          )}
-        </span>
-      ),
-    },
-    {
-      header: 'Base Fee',
-      cell: (r) => (
-        <span className="font-medium text-ink">LKR {(r.baseFeeCents / 100).toFixed(2)}</span>
-      ),
-    },
-    {
-      header: 'Per Kg Rate',
-      cell: (r) => (
-        <span className="text-muted text-sm">LKR {(r.perKgCents / 100).toFixed(2)} / kg</span>
-      ),
-    },
-    {
-      header: 'Status',
-      cell: (r) => (
-        <span
-          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-            r.isActive ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-700'
-          }`}
-        >
-          {r.isActive ? 'Active' : 'Inactive'}
-        </span>
+        <div className="tabular-nums">
+          <span className="block font-medium text-ink">{formatMoney(r.baseFeeCents)}</span>
+          <span className="text-xs text-muted">+ {formatMoney(r.perKgCents)} / kg</span>
+        </div>
       ),
     },
     {
       header: 'Actions',
+      headerClassName: 'text-right',
+      className: 'px-4 py-3 text-right',
       cell: (r) => (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            className="text-xs py-1 px-2.5"
-            onClick={() => openEditModal(r)}
-          >
+        <div className="flex items-center justify-end gap-1.5">
+          <Button variant="secondary" size="sm" onClick={() => openEditModal(r)}>
             Edit
           </Button>
           <Button
-            variant="ghost"
-            className={`text-xs py-1 px-2.5 ${r.isActive ? 'text-amber-700 hover:bg-amber-50' : 'text-green-700 hover:bg-green-50'}`}
+            variant="subtle"
+            size="sm"
+            className={r.isActive ? 'text-warning' : 'text-success'}
             onClick={() => toggleActive(r)}
           >
             {r.isActive ? 'Deactivate' : 'Activate'}
@@ -282,195 +274,195 @@ export function PricingRulesManagement() {
     <div className="space-y-4">
       {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-surface p-4 rounded-lg border border-line">
-        <div>
-          <h3 className="font-semibold text-ink text-base">Configured Pricing Rules</h3>
-          <p className="text-xs text-muted">
-            The fee calculation selects the most specific active rule matching the trip zones and
-            parcel size.
-          </p>
-        </div>
-        <Button onClick={openCreateModal}>+ Add Pricing Rule</Button>
-      </div>
-
-      <Table
-        columns={columns}
-        rows={rules}
-        rowKey={(r) => r.id}
-        empty={
-          loading ? (
-            <p className="p-4 text-sm text-muted">Loading…</p>
-          ) : (
-            <EmptyState
-              title="No pricing rules found"
-              description="No delivery pricing rules configured. At least one island-wide rule is recommended."
-              action={<Button onClick={openCreateModal}>Create Default Rule</Button>}
-            />
-          )
-        }
-      />
-
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-xl border border-line bg-surface p-6 shadow-xl animate-in fade-in zoom-in-95">
-            <div className="flex items-start justify-between border-b border-line pb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-ink">
-                  {editingRule ? 'Edit Pricing Rule' : 'Create Pricing Rule'}
-                </h3>
-                <p className="text-sm text-muted">
-                  Configure route matching, base fee, and per-kg rate.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="text-muted hover:text-ink text-xl font-bold"
-              >
-                &times;
-              </button>
-            </div>
-
-            {formError && (
-              <div className="mt-4">
-                <Alert tone="error">{formError}</Alert>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveRule} className="mt-4 space-y-4">
-              <FormField label="Rule Name" htmlFor="rule-name">
-                <Input
-                  id="rule-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Within Colombo Express"
-                  required
-                  disabled={saving}
-                />
-              </FormField>
-
-              <div className="grid grid-cols-2 gap-3">
-                <FormField label="Origin Zone" htmlFor="from-zone">
-                  <Select
-                    id="from-zone"
-                    value={fromZoneId}
-                    onChange={(e) => setFromZoneId(e.target.value)}
-                    disabled={saving}
-                  >
-                    <option value="">Any (Wildcard)</option>
-                    {zones.map((z) => (
-                      <option key={z.id} value={z.id}>
-                        {z.name} ({z.code})
-                      </option>
-                    ))}
-                  </Select>
-                </FormField>
-
-                <FormField label="Destination Zone" htmlFor="to-zone">
-                  <Select
-                    id="to-zone"
-                    value={toZoneId}
-                    onChange={(e) => setToZoneId(e.target.value)}
-                    disabled={saving}
-                  >
-                    <option value="">Any (Wildcard)</option>
-                    {zones.map((z) => (
-                      <option key={z.id} value={z.id}>
-                        {z.name} ({z.code})
-                      </option>
-                    ))}
-                  </Select>
-                </FormField>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <FormField label="Parcel Size" htmlFor="parcel-size">
-                  <Select
-                    id="parcel-size"
-                    value={size}
-                    onChange={(e) => setSize(e.target.value)}
-                    disabled={saving}
-                  >
-                    <option value="">Any Size</option>
-                    <option value="SMALL">SMALL</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="LARGE">LARGE</option>
-                  </Select>
-                </FormField>
-
-                <FormField label="Base Fee (LKR)" htmlFor="base-fee">
-                  <Input
-                    id="base-fee"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={baseFeeRupees}
-                    onChange={(e) => setBaseFeeRupees(e.target.value)}
-                    required
-                    disabled={saving}
-                  />
-                </FormField>
-
-                <FormField label="Per Kg (LKR)" htmlFor="per-kg">
-                  <Input
-                    id="per-kg"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={perKgRupees}
-                    onChange={(e) => setPerKgRupees(e.target.value)}
-                    required
-                    disabled={saving}
-                  />
-                </FormField>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 items-center">
-                <FormField
-                  label="Priority Score"
-                  htmlFor="priority"
-                  help="Used for tie-breaking when rules have equal specificity"
-                >
-                  <Input
-                    id="priority"
-                    type="number"
-                    value={priority}
-                    onChange={(e) => setPriority(parseInt(e.target.value, 10) || 0)}
-                    disabled={saving}
-                  />
-                </FormField>
-
-                <div className="flex items-center gap-2 pt-4">
-                  <input
-                    type="checkbox"
-                    id="rule-active"
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                    className="rounded border-line"
-                  />
-                  <label htmlFor="rule-active" className="text-sm font-medium text-ink">
-                    Active Rule
-                  </label>
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3 pt-3 border-t border-line">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setModalOpen(false)}
-                  disabled={saving}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={saving}>
-                  {saving ? 'Saving...' : editingRule ? 'Update Rule' : 'Create Rule'}
-                </Button>
-              </div>
-            </form>
+      <Card flush>
+        <CardHeader
+          title="Configured Pricing Rules"
+          titleAs="h3"
+          description="The fee calculation selects the most specific active rule matching the trip zones and parcel size."
+          icon={<Tag />}
+          actions={
+            <Button size="sm" onClick={openCreateModal}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Add Pricing Rule
+            </Button>
+          }
+        />
+        {loading && rules.length === 0 ? (
+          <div className="space-y-3 p-5" role="status" aria-label="Loading pricing rules">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <Table
+            bare
+            caption="Pricing rules"
+            columns={columns}
+            rows={rules}
+            rowKey={(r) => r.id}
+            empty={
+              <div className="p-5">
+                <EmptyState
+                  compact
+                  icon={<Tag />}
+                  title="No pricing rules found"
+                  description="No delivery pricing rules configured. At least one island-wide rule is recommended."
+                  action={<Button onClick={openCreateModal}>Create Default Rule</Button>}
+                />
+              </div>
+            }
+          />
+        )}
+      </Card>
+
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        size="lg"
+        title={editingRule ? 'Edit Pricing Rule' : 'Create Pricing Rule'}
+        titleAs="h3"
+        description="Configure route matching, base fee, and per-kg rate."
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setModalOpen(false)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" form="pricing-rule-form" disabled={saving}>
+              {saving ? 'Saving...' : editingRule ? 'Update Rule' : 'Create Rule'}
+            </Button>
+          </>
+        }
+      >
+        <form id="pricing-rule-form" onSubmit={handleSaveRule} className="space-y-4">
+          {formError && <Alert tone="error">{formError}</Alert>}
+
+          <FormField label="Rule Name" htmlFor="rule-name">
+            <Input
+              id="rule-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Within Colombo Express"
+              required
+              disabled={saving}
+              data-autofocus
+            />
+          </FormField>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField label="Origin Zone" htmlFor="from-zone">
+              <Select
+                id="from-zone"
+                value={fromZoneId}
+                onChange={(e) => setFromZoneId(e.target.value)}
+                disabled={saving}
+              >
+                <option value="">Any (Wildcard)</option>
+                {zones.map((z) => (
+                  <option key={z.id} value={z.id}>
+                    {z.name} ({z.code})
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+
+            <FormField label="Destination Zone" htmlFor="to-zone">
+              <Select
+                id="to-zone"
+                value={toZoneId}
+                onChange={(e) => setToZoneId(e.target.value)}
+                disabled={saving}
+              >
+                <option value="">Any (Wildcard)</option>
+                {zones.map((z) => (
+                  <option key={z.id} value={z.id}>
+                    {z.name} ({z.code})
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <FormField label="Parcel Size" htmlFor="parcel-size">
+              <Select
+                id="parcel-size"
+                value={size}
+                onChange={(e) => setSize(e.target.value)}
+                disabled={saving}
+              >
+                <option value="">Any Size</option>
+                <option value="SMALL">SMALL</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="LARGE">LARGE</option>
+              </Select>
+            </FormField>
+
+            <FormField label="Base Fee (LKR)" htmlFor="base-fee">
+              <Input
+                id="base-fee"
+                type="number"
+                step="0.01"
+                min="0"
+                value={baseFeeRupees}
+                onChange={(e) => setBaseFeeRupees(e.target.value)}
+                required
+                disabled={saving}
+              />
+            </FormField>
+
+            <FormField label="Per Kg (LKR)" htmlFor="per-kg">
+              <Input
+                id="per-kg"
+                type="number"
+                step="0.01"
+                min="0"
+                value={perKgRupees}
+                onChange={(e) => setPerKgRupees(e.target.value)}
+                required
+                disabled={saving}
+              />
+            </FormField>
+          </div>
+
+          <div className="grid items-start gap-3 sm:grid-cols-2">
+            <FormField
+              label="Priority Score"
+              htmlFor="priority"
+              help="Used for tie-breaking when rules have equal specificity"
+            >
+              <Input
+                id="priority"
+                type="number"
+                value={priority}
+                onChange={(e) => setPriority(parseInt(e.target.value, 10) || 0)}
+                disabled={saving}
+              />
+            </FormField>
+
+            <label
+              htmlFor="rule-active"
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-2 p-3 sm:mt-6"
+            >
+              <input
+                type="checkbox"
+                id="rule-active"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-brand"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-ink">Active Rule</span>
+                <span className="block text-xs text-muted">Used for new fee estimates</span>
+              </span>
+            </label>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

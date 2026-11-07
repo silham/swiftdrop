@@ -1,373 +1,331 @@
 'use client';
 
+import {
+  Activity,
+  ArrowRight,
+  BellRing,
+  ChartColumn,
+  ChartPie,
+  ServerCog,
+  Store,
+  Trophy,
+  Webhook,
+  type LucideIcon,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
-import { Alert, Button, Card, EmptyState, Table, type Column } from '@/components/ui';
+import { useState } from 'react';
+import { ActivityFeed, Alert, Avatar, Badge, Button, ChartCard, cn } from '@/components/ui';
+import { DonutChart } from '@/components/ui/charts';
 import { api } from '@/lib/api/client';
-import { errorMessage } from '@/lib/api/errors';
+import { formatDateTime, formatNumber, formatRelative } from '@/lib/format';
+import { fetchOverview, type OverviewData, type OverviewErrors } from './overview-data';
+import { CourierLeaderboard, DeliveryKpis, VolumeTrend } from './report-widgets';
 
-type DeliverySummary = {
-  total: number;
-  delivered: number;
-  failed: number;
-  inProgress: number;
-  successRate: number;
-};
+export type { OverviewData, OverviewErrors } from './overview-data';
 
-type DailyVolume = {
-  date: string;
-  created: number;
-  delivered: number;
-  failed: number;
-};
+const linkClass =
+  'inline-flex items-center gap-1 text-xs font-medium text-brand hover:text-brand-hover';
 
-type CourierPerformance = {
-  courierId: string;
-  name: string;
-  assigned: number;
-  delivered: number;
-  failed: number;
-};
-
-type OverviewAudit = {
-  id: string;
-  action: string;
-  entityType: string;
-  actor: { name: string; role: string } | null;
-  actorRole: string | null;
-  timestamp: string;
-};
-
-export type OverviewData = {
-  summary?: DeliverySummary;
-  dailyVolume?: DailyVolume[];
-  couriers?: CourierPerformance[];
-  audit?: { data: OverviewAudit[]; meta: { total: number } };
-};
-
-export type OverviewErrors = {
-  summary?: string;
-  dailyVolume?: string;
-  couriers?: string;
-  audit?: string;
-};
-
-const numberFormat = new Intl.NumberFormat();
-const dateFormat = new Intl.DateTimeFormat('en-LK', {
-  month: 'short',
-  day: 'numeric',
-  timeZone: 'Asia/Colombo',
-});
-const dateTimeFormat = new Intl.DateTimeFormat('en-LK', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-  timeZone: 'Asia/Colombo',
-});
-
-function percentage(value: number) {
-  return `${(value * 100).toFixed(1)}%`;
+function CardLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className={linkClass}>
+      {children}
+      <ArrowRight className="h-3 w-3" aria-hidden="true" />
+    </Link>
+  );
 }
 
-function LoadingSkeleton() {
+/** One line in the health / attention widgets. */
+function SignalRow({
+  icon: Icon,
+  label,
+  detail,
+  value,
+  tone,
+  href,
+}: {
+  icon: LucideIcon;
+  label: string;
+  detail: string;
+  value: React.ReactNode;
+  tone: 'success' | 'warning' | 'danger' | 'neutral';
+  href?: string;
+}) {
+  const chip = {
+    success: 'bg-success-soft text-success',
+    warning: 'bg-warning-soft text-warning',
+    danger: 'bg-danger-soft text-danger',
+    neutral: 'bg-surface-2 text-muted',
+  }[tone];
+  const body = (
+    <>
+      <span
+        className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', chip)}
+        aria-hidden="true"
+      >
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-ink">{label}</span>
+        <span className="block truncate text-xs text-muted">{detail}</span>
+      </span>
+      <span className="text-lg font-semibold text-ink tabular-nums">{value}</span>
+    </>
+  );
+  const classes = 'flex items-center gap-3 rounded-lg px-2 py-2.5';
+  return href ? (
+    <Link href={href} className={cn(classes, 'transition hover:bg-surface-2')}>
+      {body}
+    </Link>
+  ) : (
+    <div className={classes}>{body}</div>
+  );
+}
+
+function SystemHealth({ health }: { health: NonNullable<OverviewData['health']> }) {
+  const queues = health.queues ?? [];
+  const dlq = queues.filter((q) => q.kind === 'dlq').reduce((n, q) => n + (q.messages ?? 0), 0);
+  const work = queues.filter((q) => q.kind === 'work');
+  const backlog = work.reduce((n, q) => n + (q.messages ?? 0), 0);
+  const noConsumers = work.filter((q) => q.consumers === 0).length;
+  const healthy = health.failing === 0 && dlq === 0 && noConsumers === 0;
   return (
-    <div className="space-y-6" aria-label="Loading overview" role="status">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {Array.from({ length: 5 }, (_, index) => (
-          <Card key={index} className="animate-pulse">
-            <div className="h-4 w-24 rounded bg-canvas" />
-            <div className="mt-4 h-8 w-16 rounded bg-canvas" />
-          </Card>
-        ))}
+    <div className="space-y-1">
+      <div className="mb-3 flex items-center gap-2">
+        <Badge tone={healthy ? 'success' : 'warning'} dot>
+          {healthy ? 'All systems operational' : 'Needs a look'}
+        </Badge>
       </div>
-      <Card className="animate-pulse">
-        <div className="h-5 w-40 rounded bg-canvas" />
-        <div className="mt-6 h-48 rounded bg-canvas" />
-      </Card>
+      <SignalRow
+        icon={ServerCog}
+        label="Outbox backlog"
+        detail={
+          health.failing > 0 ? `${health.failing} failing to publish` : 'Events waiting to publish'
+        }
+        value={formatNumber(health.pending)}
+        tone={health.failing > 0 ? 'danger' : health.pending > 50 ? 'warning' : 'success'}
+        href="/admin/ops"
+      />
+      <SignalRow
+        icon={Activity}
+        label="Work queues"
+        detail={
+          health.queues
+            ? noConsumers > 0
+              ? `${noConsumers} queue(s) without consumers`
+              : `${work.length} queues consuming`
+            : 'Queue depths unavailable'
+        }
+        value={health.queues ? formatNumber(backlog) : '—'}
+        tone={!health.queues ? 'neutral' : noConsumers > 0 ? 'warning' : 'success'}
+        href="/admin/ops"
+      />
+      <SignalRow
+        icon={Webhook}
+        label="Dead-letter queues"
+        detail={dlq > 0 ? 'Messages need inspection' : 'Nothing dead-lettered'}
+        value={health.queues ? formatNumber(dlq) : '—'}
+        tone={!health.queues ? 'neutral' : dlq > 0 ? 'danger' : 'success'}
+        href="/admin/ops"
+      />
     </div>
   );
 }
 
-function courierSuccessRate(row: CourierPerformance) {
-  const terminalOutcomes = row.delivered + row.failed;
-  return terminalOutcomes === 0 ? 0 : row.delivered / terminalOutcomes;
+function NeedsAttention({ attention }: { attention: NonNullable<OverviewData['attention']> }) {
+  const pending = attention.pendingMerchants;
+  const dead = attention.deadWebhooks;
+  return (
+    <div className="space-y-1">
+      <SignalRow
+        icon={Store}
+        label="Merchant applications"
+        detail={pending ? 'Waiting for approval' : 'No pending applications'}
+        value={pending == null ? '—' : formatNumber(pending)}
+        tone={pending == null ? 'neutral' : pending > 0 ? 'warning' : 'success'}
+        href="/admin/merchants?status=PENDING"
+      />
+      <SignalRow
+        icon={BellRing}
+        label="Dead webhook deliveries"
+        detail={dead ? 'Retry from event ops' : 'All deliveries healthy'}
+        value={dead == null ? '—' : formatNumber(dead)}
+        tone={dead == null ? 'neutral' : dead > 0 ? 'danger' : 'success'}
+        href="/admin/ops?status=DEAD"
+      />
+    </div>
+  );
 }
 
 export function AdminOverviewDashboard({
   initialData,
-  initialAudit,
   initialErrors,
 }: {
   initialData: OverviewData;
-  initialAudit: OverviewData['audit'] | null;
   initialErrors: OverviewErrors;
 }) {
   const [data, setData] = useState(initialData);
-  const [audit, setAudit] = useState(initialAudit);
   const [errors, setErrors] = useState(initialErrors);
   const [loading, setLoading] = useState(false);
 
-  async function loadOverview() {
+  async function retry() {
     setLoading(true);
-    const [summary, dailyVolume, couriers, auditResponse] = (await Promise.all([
-      api.GET('/api/v1/admin/reports/deliveries'),
-      api.GET('/api/v1/admin/reports/daily-volume'),
-      api.GET('/api/v1/admin/reports/couriers'),
-      api.GET('/api/v1/admin/audit-logs', { params: { query: { page: 1, pageSize: 5 } } }),
-    ])) as [
-      { data?: OverviewData['summary']; error?: unknown },
-      { data?: OverviewData['dailyVolume']; error?: unknown },
-      { data?: OverviewData['couriers']; error?: unknown },
-      { data?: unknown; error?: unknown },
-    ];
-    setData({
-      summary: summary.data ?? undefined,
-      dailyVolume: dailyVolume.data ?? undefined,
-      couriers: couriers.data ?? undefined,
-    });
-    setErrors({
-      summary: summary.error
-        ? errorMessage(summary.error, 'Could not load delivery summary')
-        : undefined,
-      dailyVolume: dailyVolume.error
-        ? errorMessage(dailyVolume.error, 'Could not load daily delivery activity')
-        : undefined,
-      couriers: couriers.error
-        ? errorMessage(couriers.error, 'Could not load courier performance')
-        : undefined,
-      audit: auditResponse.error
-        ? errorMessage(auditResponse.error, 'Could not load recent audit activity')
-        : undefined,
-    });
-    if (auditResponse.data) {
-      setAudit(auditResponse.data as unknown as OverviewData['audit']);
-    } else {
-      setAudit(null);
-    }
+    const next = await fetchOverview(api);
+    setData(next.data);
+    setErrors(next.errors);
     setLoading(false);
   }
 
-  const maxVolume = useMemo(
-    () =>
-      Math.max(
-        1,
-        ...(data.dailyVolume?.flatMap((row) => [row.created, row.delivered, row.failed]) ?? []),
-      ),
-    [data],
-  );
-
-  const courierColumns: Column<CourierPerformance>[] = [
-    { header: 'Courier', cell: (row) => <span className="font-medium">{row.name}</span> },
-    { header: 'Assigned', cell: (row) => numberFormat.format(row.assigned) },
-    { header: 'Delivered', cell: (row) => numberFormat.format(row.delivered) },
-    { header: 'Failed', cell: (row) => numberFormat.format(row.failed) },
-    { header: 'Success rate', cell: (row) => percentage(courierSuccessRate(row)) },
-  ];
+  const anyError = Object.values(errors).some(Boolean);
+  const summary = data.summary;
+  const daily = data.dailyVolume ?? [];
 
   return (
     <div className="space-y-6">
-      {loading && !data ? <LoadingSkeleton /> : null}
-      {(errors.summary || errors.dailyVolume || errors.couriers || errors.audit) && (
-        <Alert tone="error">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span>Some overview sections could not be loaded.</span>
-            <Button variant="secondary" onClick={() => void loadOverview()} disabled={loading}>
-              {loading ? 'Retrying...' : 'Retry'}
+      {anyError && (
+        <Alert
+          tone="error"
+          title="Some overview sections could not be loaded."
+          action={
+            <Button variant="secondary" size="sm" onClick={() => void retry()} disabled={loading}>
+              {loading ? 'Retrying…' : 'Retry'}
             </Button>
-          </div>
-        </Alert>
+          }
+        />
       )}
 
-      {data.summary ||
-      data.dailyVolume ||
-      data.couriers ||
-      audit ||
-      errors.summary ||
-      errors.dailyVolume ||
-      errors.couriers ||
-      errors.audit ? (
-        <>
-          {errors.summary ? (
-            <Alert tone="error">{errors.summary}</Alert>
-          ) : data.summary ? (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-              {[
-                ['Total parcels', data.summary.total],
-                ['Delivered', data.summary.delivered],
-                ['Failed', data.summary.failed],
-                ['In progress', data.summary.inProgress],
-                ['Success rate', percentage(data.summary.successRate)],
-              ].map(([label, value]) => (
-                <Card key={String(label)}>
-                  <p className="text-sm text-muted">{label}</p>
-                  <p className="mt-2 text-3xl font-semibold tracking-tight">
-                    {typeof value === 'number' ? numberFormat.format(value) : value}
-                  </p>
-                </Card>
-              ))}
-            </div>
-          ) : null}
+      {errors.summary ? (
+        <Alert tone="error">{errors.summary}</Alert>
+      ) : (
+        <DeliveryKpis summary={summary} daily={daily} loading={loading && !summary} />
+      )}
 
-          {errors.dailyVolume ? (
-            <Alert tone="error">{errors.dailyVolume}</Alert>
-          ) : data.dailyVolume ? (
-            <Card>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold">Delivery activity</h2>
-                  <p className="mt-1 text-sm text-muted">
-                    Creation and latest terminal events by Asia/Colombo calendar day.
-                  </p>
-                </div>
-                <Link
-                  className="text-sm font-medium text-brand hover:text-brand-dark"
-                  href="/admin/reports"
-                >
-                  View detailed reports
-                </Link>
-              </div>
-              {data.dailyVolume.length === 0 ? (
-                <div className="mt-6">
-                  <EmptyState
-                    title="No delivery activity"
-                    description="No daily volume data is available."
-                  />
-                </div>
-              ) : (
-                <div className="mt-6">
-                  <div
-                    className="mb-4 flex flex-wrap gap-4 text-xs text-muted"
-                    aria-label="Chart legend"
-                  >
-                    <span>
-                      <i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-brand" />
-                      Created
-                    </span>
-                    <span>
-                      <i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-success" />
-                      Delivered
-                    </span>
-                    <span>
-                      <i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-danger" />
-                      Failed
-                    </span>
-                  </div>
-                  <div
-                    className="flex min-h-56 items-end gap-2 overflow-x-auto border-b border-line pb-2"
-                    role="img"
-                    aria-label="Recent daily parcel volume bar chart"
-                  >
-                    {data.dailyVolume.map((row) => (
-                      <div
-                        key={row.date}
-                        className="flex min-w-12 flex-1 flex-col items-center gap-2"
-                      >
-                        <div className="flex h-44 items-end gap-0.5">
-                          {[
-                            ['Created', row.created, 'bg-brand'],
-                            ['Delivered', row.delivered, 'bg-success'],
-                            ['Failed', row.failed, 'bg-danger'],
-                          ].map(([label, value, color]) => (
-                            <div
-                              key={String(label)}
-                              className={`w-3 rounded-t ${color}`}
-                              style={{
-                                height: `${(Number(value) / maxVolume) * 100}%`,
-                                minHeight: value ? '4px' : '0',
-                              }}
-                              title={`${label}: ${value}`}
-                            />
-                          ))}
-                        </div>
-                        <span className="text-[10px] text-muted">
-                          {dateFormat.format(new Date(`${row.date}T00:00:00`))}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </Card>
-          ) : null}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <ChartCard
+          className="lg:col-span-2"
+          title="Delivery activity"
+          description="Created and latest delivered / failed events per Asia/Colombo day."
+          icon={<ChartColumn />}
+          actions={<CardLink href="/admin/reports">View detailed reports</CardLink>}
+          loading={loading && !data.dailyVolume}
+          error={errors.dailyVolume}
+          empty={daily.length === 0}
+          emptyTitle="No delivery activity"
+          emptyDescription="No daily volume data is available."
+          minHeight={300}
+        >
+          <VolumeTrend daily={daily} />
+        </ChartCard>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            {errors.couriers ? (
-              <Alert tone="error">{errors.couriers}</Alert>
-            ) : data.couriers ? (
-              <Card>
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-semibold">Courier performance</h2>
-                    <p className="mt-1 text-sm text-muted">
-                      Current workload and delivery outcomes.
-                    </p>
-                  </div>
-                  <Link
-                    className="text-sm font-medium text-brand hover:text-brand-dark"
-                    href="/admin/reports"
-                  >
-                    Details
-                  </Link>
-                </div>
-                <Table
-                  columns={courierColumns}
-                  rows={data.couriers.slice(0, 5)}
-                  rowKey={(row) => row.courierId}
-                  empty={
-                    <EmptyState title="No courier activity" description="No assignments found." />
-                  }
-                />
-              </Card>
-            ) : null}
+        <ChartCard
+          title="Status mix"
+          description="Parcels active in the last 30 days."
+          icon={<ChartPie />}
+          loading={loading && !summary}
+          error={errors.summary}
+          empty={!summary || summary.total === 0}
+          emptyTitle="No parcels yet"
+          minHeight={300}
+          bodyClassName="flex items-center"
+        >
+          {summary && (
+            <DonutChart
+              className="w-full sm:flex-col xl:flex-col"
+              label="Parcel status mix"
+              centerLabel="Parcels"
+              data={[
+                { name: 'Delivered', value: summary.delivered, color: 'var(--sd-chart-3)' },
+                { name: 'In progress', value: summary.inProgress, color: 'var(--sd-chart-2)' },
+                { name: 'Failed', value: summary.failed, color: 'var(--sd-chart-4)' },
+              ]}
+            />
+          )}
+        </ChartCard>
+      </div>
 
-            <Card>
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold">Recent audit activity</h2>
-                  <p className="mt-1 text-sm text-muted">Safe administrative activity summary.</p>
-                </div>
-                <Link
-                  className="text-sm font-medium text-brand hover:text-brand-dark"
-                  href="/admin/audit"
-                >
-                  View all
-                </Link>
-              </div>
-              {errors.audit ? (
-                <Alert tone="error">{errors.audit}</Alert>
-              ) : audit?.data.length ? (
-                <ul className="divide-y divide-line">
-                  {audit.data.map((entry) => (
-                    <li key={entry.id} className="py-3 first:pt-0 last:pb-0">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <p className="font-medium">{entry.action}</p>
-                          <p className="text-xs text-muted">
-                            {entry.actor?.name ?? 'System'} ·{' '}
-                            {entry.actor?.role ?? entry.actorRole ?? 'SYSTEM'}
-                          </p>
-                        </div>
-                        <time className="text-xs text-muted" dateTime={entry.timestamp}>
-                          {dateTimeFormat.format(new Date(entry.timestamp))}
-                        </time>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <EmptyState
-                  title="No recent audit activity"
-                  description="Administrative activity will appear here when recorded."
-                />
-              )}
-            </Card>
-          </div>
-        </>
-      ) : !loading ? (
-        <EmptyState
-          title="No overview data"
-          description="There is no operational data to display."
+      <div className="grid gap-6 lg:grid-cols-3">
+        <ChartCard
+          title="Courier performance"
+          description="Top couriers by deliveries."
+          icon={<Trophy />}
+          actions={<CardLink href="/admin/reports">Details</CardLink>}
+          loading={loading && !data.couriers}
+          error={errors.couriers}
+          empty={!data.couriers || data.couriers.length === 0}
+          emptyTitle="No courier activity"
+          emptyDescription="No assignments found."
+          minHeight={200}
+        >
+          <CourierLeaderboard couriers={data.couriers ?? []} />
+        </ChartCard>
+
+        <ChartCard
+          title="System health"
+          description="Outbox and RabbitMQ."
+          icon={<ServerCog />}
+          actions={<CardLink href="/admin/ops">Event ops</CardLink>}
+          loading={loading && !data.health}
+          error={data.health ? undefined : errors.health}
+          empty={!data.health}
+          emptyTitle="Health data unavailable"
+          minHeight={200}
+        >
+          {data.health && <SystemHealth health={data.health} />}
+          {data.health && errors.health && (
+            <p className="mt-2 text-xs text-danger">{errors.health}</p>
+          )}
+        </ChartCard>
+
+        <ChartCard
+          title="Needs attention"
+          description="Waiting on an admin."
+          icon={<BellRing />}
+          loading={loading && !data.attention}
+          error={data.attention ? undefined : errors.attention}
+          empty={!data.attention}
+          emptyTitle="Nothing to review"
+          minHeight={200}
+        >
+          {data.attention && <NeedsAttention attention={data.attention} />}
+        </ChartCard>
+      </div>
+
+      <ChartCard
+        title="Recent audit activity"
+        description="Safe administrative activity summary."
+        icon={<Activity />}
+        actions={<CardLink href="/admin/audit">View all</CardLink>}
+        loading={loading && !data.audit}
+        error={errors.audit}
+        empty={!data.audit?.data.length}
+        emptyTitle="No recent audit activity"
+        emptyDescription="Administrative activity will appear here when recorded."
+        minHeight={160}
+      >
+        <ActivityFeed
+          items={(data.audit?.data ?? []).map((entry) => {
+            const who = entry.actor?.name ?? 'System';
+            return {
+              id: entry.id,
+              leading: <Avatar name={who} size="md" />,
+              title: (
+                <>
+                  <span className="font-medium">{who}</span>{' '}
+                  <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-ink">
+                    {entry.action}
+                  </code>
+                </>
+              ),
+              description: `${entry.entityType} · ${entry.actor?.role ?? entry.actorRole ?? 'SYSTEM'}`,
+              time: (
+                <time dateTime={entry.timestamp} title={formatDateTime(entry.timestamp)}>
+                  {formatRelative(entry.timestamp)}
+                </time>
+              ),
+            };
+          })}
         />
-      ) : null}
+      </ChartCard>
     </div>
   );
 }

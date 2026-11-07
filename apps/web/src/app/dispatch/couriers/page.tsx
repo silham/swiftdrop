@@ -10,8 +10,10 @@ export default async function DispatchCouriersPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Dispatch"
         title="Courier Workload"
         description="Monitor active parcel assignments and fleet capacity across delivery zones."
+        breadcrumbs={[{ label: 'Dispatch', href: '/dispatch' }, { label: 'Courier workload' }]}
       />
       <CourierWorkload />
     </>

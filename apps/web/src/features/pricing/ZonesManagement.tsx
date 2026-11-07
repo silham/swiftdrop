@@ -1,7 +1,24 @@
 'use client';
 
+import { Building, CircleCheck, Map as MapIcon, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Alert, Button, EmptyState, FormField, Input, Table, type Column } from '@/components/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  FormField,
+  Input,
+  Modal,
+  Skeleton,
+  StatCard,
+  StatGrid,
+  Table,
+  type Column,
+} from '@/components/ui';
+import { formatNumber } from '@/lib/format';
 import { api } from '@/lib/api/client';
 import { errorMessage } from '@/lib/api/errors';
 
@@ -146,7 +163,11 @@ export function ZonesManagement() {
   const columns: Column<ZoneItem>[] = [
     {
       header: 'Code',
-      cell: (z) => <span className="font-mono font-bold text-ink">{z.code}</span>,
+      cell: (z) => (
+        <span className="inline-flex rounded-md bg-brand-soft px-2 py-0.5 font-mono text-xs font-semibold text-brand-dark">
+          {z.code}
+        </span>
+      ),
     },
     {
       header: 'Zone Name',
@@ -155,11 +176,11 @@ export function ZonesManagement() {
     {
       header: 'Serviced Cities',
       cell: (z) => (
-        <div className="flex flex-wrap gap-1 max-w-md">
+        <div className="flex max-w-md flex-wrap gap-1">
           {z.cities.map((city) => (
             <span
               key={city}
-              className="inline-flex rounded-md bg-canvas px-2 py-0.5 text-xs text-ink border border-line capitalize"
+              className="inline-flex rounded-md border border-line bg-surface-2 px-2 py-0.5 text-xs text-ink capitalize"
             >
               {city}
             </span>
@@ -170,29 +191,24 @@ export function ZonesManagement() {
     {
       header: 'Status',
       cell: (z) => (
-        <span
-          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-            z.isActive ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-700'
-          }`}
-        >
+        <Badge tone={z.isActive ? 'success' : 'neutral'} dot>
           {z.isActive ? 'Active' : 'Inactive'}
-        </span>
+        </Badge>
       ),
     },
     {
       header: 'Actions',
+      headerClassName: 'text-right',
+      className: 'px-4 py-3 text-right',
       cell: (z) => (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            className="text-xs py-1 px-2.5"
-            onClick={() => openEditModal(z)}
-          >
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={() => openEditModal(z)}>
             Edit
           </Button>
           <Button
-            variant="ghost"
-            className={`text-xs py-1 px-2.5 ${z.isActive ? 'text-amber-700 hover:bg-amber-50' : 'text-green-700 hover:bg-green-50'}`}
+            variant="subtle"
+            size="sm"
+            className={z.isActive ? 'text-warning' : 'text-success'}
             onClick={() => toggleActive(z)}
           >
             {z.isActive ? 'Deactivate' : 'Activate'}
@@ -202,74 +218,119 @@ export function ZonesManagement() {
     },
   ];
 
+  const activeZones = zones.filter((z) => z.isActive).length;
+  const cityCount = new Set(zones.filter((z) => z.isActive).flatMap((z) => z.cities)).size;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <StatGrid cols={3}>
+        <StatCard
+          label="Delivery zones"
+          value={formatNumber(zones.length)}
+          icon={<MapIcon />}
+          loading={loading && zones.length === 0}
+          hint="Configured service areas"
+        />
+        <StatCard
+          label="Active zones"
+          value={formatNumber(activeZones)}
+          icon={<CircleCheck />}
+          tone="success"
+          loading={loading && zones.length === 0}
+          hint={zones.length ? `${zones.length - activeZones} inactive` : undefined}
+        />
+        <StatCard
+          label="Cities serviced"
+          value={formatNumber(cityCount)}
+          icon={<Building />}
+          tone="info"
+          loading={loading && zones.length === 0}
+          hint="Across active zones"
+        />
+      </StatGrid>
+
       {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-surface p-4 rounded-lg border border-line">
-        <div>
-          <h3 className="font-semibold text-ink text-base">Configured Delivery Zones</h3>
-          <p className="text-xs text-muted">
-            Zones determine which areas are serviceable and drive fee estimation rules.
-          </p>
-        </div>
-        <Button onClick={openCreateModal}>+ Add Delivery Zone</Button>
-      </div>
-
-      <Table
-        columns={columns}
-        rows={zones}
-        rowKey={(z) => z.id}
-        empty={
-          loading ? (
-            <p className="p-4 text-sm text-muted">Loading…</p>
-          ) : (
-            <EmptyState
-              title="No delivery zones"
-              description="No delivery zones have been configured yet."
-              action={<Button onClick={openCreateModal}>Create First Zone</Button>}
-            />
-          )
-        }
-      />
-
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-xl border border-line bg-surface p-6 shadow-xl animate-in fade-in zoom-in-95">
-            <div className="flex items-start justify-between border-b border-line pb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-ink">
-                  {editingZone ? 'Edit Delivery Zone' : 'Create Delivery Zone'}
-                </h3>
-                <p className="text-sm text-muted">Configure zone identifier and covered cities.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="text-muted hover:text-ink text-xl font-bold"
-              >
-                &times;
-              </button>
-            </div>
-
-            {formError && (
-              <div className="mt-4">
-                <Alert tone="error">{formError}</Alert>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveZone} className="mt-4 space-y-4">
-              <FormField label="Zone Code (e.g. CMB, KDY)" htmlFor="zone-code">
-                <Input
-                  id="zone-code"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  placeholder="CMB"
-                  required
-                  disabled={saving}
+      <Card flush>
+        <CardHeader
+          title="Configured Delivery Zones"
+          titleAs="h3"
+          description="Zones determine which areas are serviceable and drive fee estimation rules."
+          icon={<MapIcon />}
+          actions={
+            <Button size="sm" onClick={openCreateModal}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Add Delivery Zone
+            </Button>
+          }
+        />
+        {loading && zones.length === 0 ? (
+          <div className="space-y-3 p-5" role="status" aria-label="Loading delivery zones">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : (
+          <Table
+            bare
+            caption="Delivery zones"
+            columns={columns}
+            rows={zones}
+            rowKey={(z) => z.id}
+            empty={
+              <div className="p-5">
+                <EmptyState
+                  compact
+                  icon={<MapIcon />}
+                  title="No delivery zones"
+                  description="No delivery zones have been configured yet."
+                  action={<Button onClick={openCreateModal}>Create First Zone</Button>}
                 />
-              </FormField>
+              </div>
+            }
+          />
+        )}
+      </Card>
 
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editingZone ? 'Edit Delivery Zone' : 'Create Delivery Zone'}
+        titleAs="h3"
+        description="Configure zone identifier and covered cities."
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setModalOpen(false)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" form="zone-form" disabled={saving}>
+              {saving ? 'Saving...' : editingZone ? 'Update Zone' : 'Create Zone'}
+            </Button>
+          </>
+        }
+      >
+        <form id="zone-form" onSubmit={handleSaveZone} className="space-y-4">
+          {formError && <Alert tone="error">{formError}</Alert>}
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <FormField label="Zone Code (e.g. CMB, KDY)" htmlFor="zone-code">
+              <Input
+                id="zone-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="CMB"
+                required
+                disabled={saving}
+                data-autofocus
+              />
+            </FormField>
+
+            <div className="sm:col-span-2">
               <FormField label="Zone Name" htmlFor="zone-name">
                 <Input
                   id="zone-name"
@@ -280,52 +341,44 @@ export function ZonesManagement() {
                   disabled={saving}
                 />
               </FormField>
-
-              <FormField
-                label="Serviced Cities"
-                htmlFor="zone-cities"
-                help="Comma-separated city names (e.g. colombo, dehiwala, kotte)"
-              >
-                <Input
-                  id="zone-cities"
-                  value={citiesInput}
-                  onChange={(e) => setCitiesInput(e.target.value)}
-                  placeholder="colombo, dehiwala, mount lavinia"
-                  required
-                  disabled={saving}
-                />
-              </FormField>
-
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="zone-active"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                  className="rounded border-line"
-                />
-                <label htmlFor="zone-active" className="text-sm font-medium text-ink">
-                  Active (available for bookings and fee calculation)
-                </label>
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3 pt-3 border-t border-line">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setModalOpen(false)}
-                  disabled={saving}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={saving}>
-                  {saving ? 'Saving...' : editingZone ? 'Update Zone' : 'Create Zone'}
-                </Button>
-              </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
+
+          <FormField
+            label="Serviced Cities"
+            htmlFor="zone-cities"
+            help="Comma-separated city names (e.g. colombo, dehiwala, kotte)"
+          >
+            <Input
+              id="zone-cities"
+              value={citiesInput}
+              onChange={(e) => setCitiesInput(e.target.value)}
+              placeholder="colombo, dehiwala, mount lavinia"
+              required
+              disabled={saving}
+            />
+          </FormField>
+
+          <label
+            htmlFor="zone-active"
+            className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-2 p-3"
+          >
+            <input
+              type="checkbox"
+              id="zone-active"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-brand"
+            />
+            <span className="text-sm">
+              <span className="font-medium text-ink">Active</span>
+              <span className="block text-xs text-muted">
+                Available for bookings and fee calculation
+              </span>
+            </span>
+          </label>
+        </form>
+      </Modal>
     </div>
   );
 }

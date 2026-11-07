@@ -45,7 +45,7 @@ export function GoogleButton({ label = 'Continue with Google' }: { label?: strin
         type="button"
         onClick={start}
         disabled={pending}
-        className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:bg-canvas disabled:opacity-60"
+        className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-line-strong bg-surface px-4 py-2 text-sm font-medium text-ink shadow-card transition hover:bg-surface-2 disabled:opacity-60"
       >
         {/* Google's brand colours are fixed by their guidelines, so they are not design tokens. */}
         <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">

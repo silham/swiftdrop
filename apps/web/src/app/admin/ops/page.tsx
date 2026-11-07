@@ -1,9 +1,10 @@
-import { PageHeader } from '@/components/ui';
+import { Webhook } from 'lucide-react';
+import { Card, CardHeader, PageHeader } from '@/components/ui';
 import {
   AttemptFilters,
   AttemptsTable,
   OpsError,
-  OutboxStats,
+  OpsHealth,
   QueueDepths,
 } from '@/features/ops/EventOps';
 import { serverApi } from '@/lib/api/server';
@@ -29,34 +30,44 @@ export default async function AdminOpsPage({
       : 'DEAD';
 
   const api = await serverApi();
-  const [outbox, queues, attempts] = await Promise.all([
+  const [outbox, queues, attempts, dead] = await Promise.all([
     api.GET('/api/v1/admin/ops/outbox'),
     api.GET('/api/v1/admin/ops/queues'),
     api.GET('/api/v1/admin/ops/webhook-attempts', {
       params: { query: { pageSize: 50, ...(status === 'ALL' ? {} : { status }) } },
     }),
+    status === 'DEAD'
+      ? Promise.resolve(null)
+      : api.GET('/api/v1/admin/ops/webhook-attempts', {
+          params: { query: { pageSize: 1, status: 'DEAD' } },
+        }),
   ]);
+  const deadTotal =
+    status === 'DEAD' ? attempts.data?.meta.total : (dead?.data?.meta.total ?? undefined);
 
   return (
     <>
       <PageHeader
         title={'Event operations'}
-        description="Outbox backlog and dead-lettered webhooks"
+        description="Outbox backlog, queue depths and dead-lettered webhooks"
       />
       <div className="space-y-6">
-        {outbox.data ? (
-          <OutboxStats pending={outbox.data.pending} failing={outbox.data.failing} />
-        ) : (
+        {!outbox.data && (
           <OpsError message={errorMessage(outbox.error, 'Could not load the outbox backlog')} />
         )}
+        <OpsHealth outbox={outbox.data} queues={queues.data} deadAttempts={deadTotal} />
         {queues.data ? (
           <QueueDepths queues={queues.data} />
         ) : (
           <OpsError message={errorMessage(queues.error, 'Could not load queue depths')} />
         )}
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Webhook deliveries</h2>
-          <AttemptFilters active={status} />
+        <Card flush>
+          <CardHeader
+            title="Webhook deliveries"
+            description="Merchant webhook attempts. Failed ones retry automatically; dead ones need a manual retry."
+            icon={<Webhook />}
+            actions={<AttemptFilters active={status} />}
+          />
           {attempts.data ? (
             <AttemptsTable
               attempts={attempts.data.data}
@@ -64,9 +75,11 @@ export default async function AdminOpsPage({
               status={status}
             />
           ) : (
-            <OpsError message={errorMessage(attempts.error, 'Could not load webhook attempts')} />
+            <div className="p-5">
+              <OpsError message={errorMessage(attempts.error, 'Could not load webhook attempts')} />
+            </div>
           )}
-        </section>
+        </Card>
       </div>
     </>
   );

@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Alert, Button, FormField, Select } from '@/components/ui';
+import { Alert, Badge, Button, KeyValue, Modal, ProgressBar, Skeleton, cn } from '@/components/ui';
 import { api } from '@/lib/api/client';
 import { errorMessage } from '@/lib/api/errors';
 import type { CourierWorkloadItem } from './CourierWorkload';
+import { courierState, hasCapacity, utilisationPct } from './workload';
 
 export interface AssignableParcel {
   id: string;
@@ -23,6 +24,7 @@ interface AssignCourierModalProps {
   onAssigned: () => void;
 }
 
+/** Owner: M7. Pick a courier (with live capacity) and POST /dispatch/assignments. */
 export function AssignCourierModal({ parcel, onClose, onAssigned }: AssignCourierModalProps) {
   const [couriers, setCouriers] = useState<CourierWorkloadItem[]>([]);
   const [selectedCourierId, setSelectedCourierId] = useState<string>('');
@@ -93,126 +95,128 @@ export function AssignCourierModal({ parcel, onClose, onAssigned }: AssignCourie
     onClose();
   }
 
-  const selectedCourier = couriers.find((c) => c.courierId === selectedCourierId);
+  // Couriers with capacity first, then by lowest utilisation.
+  const sorted = [...couriers].sort(
+    (a, b) =>
+      Number(hasCapacity(b)) - Number(hasCapacity(a)) || utilisationPct(a) - utilisationPct(b),
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-lg rounded-xl border border-line bg-surface p-6 shadow-xl animate-in fade-in zoom-in-95">
-        <div className="flex items-start justify-between border-b border-line pb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-ink">Assign Courier</h3>
-            <p className="text-sm text-muted">
-              Select an available courier to handle delivery for parcel{' '}
-              <span className="font-mono font-medium text-ink">{parcel.trackingNumber}</span>
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-muted hover:text-ink text-xl font-bold"
+    <Modal
+      open
+      onClose={onClose}
+      title="Assign Courier"
+      titleAs="h3"
+      size="lg"
+      description={
+        <>
+          Select an available courier to handle delivery for parcel{' '}
+          <span className="font-mono font-medium text-ink">{parcel.trackingNumber}</span>
+        </>
+      }
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="assign-courier-form"
+            disabled={submitting || !selectedCourierId || loadingCouriers}
           >
-            &times;
-          </button>
+            {submitting ? 'Assigning...' : 'Confirm Assignment'}
+          </Button>
+        </>
+      }
+    >
+      <form id="assign-courier-form" onSubmit={handleAssign} className="space-y-4">
+        {error && <Alert tone="error">{error}</Alert>}
+
+        <div className="rounded-lg border border-line bg-surface-2 p-3">
+          <KeyValue
+            columns={3}
+            items={[
+              {
+                label: 'Origin / Pickup',
+                value: (
+                  <span className="capitalize">
+                    {parcel.pickupCity} {parcel.pickupZoneName ? `(${parcel.pickupZoneName})` : ''}
+                  </span>
+                ),
+              },
+              {
+                label: 'Destination',
+                value: <span className="capitalize">{parcel.dropoffCity}</span>,
+              },
+              { label: 'Size & Weight', value: `${parcel.size} · ${parcel.weightKg} kg` },
+            ]}
+          />
         </div>
 
-        {error && (
-          <div className="mt-4">
-            <Alert tone="error">{error}</Alert>
-          </div>
-        )}
-
-        <div className="mt-4 rounded-lg bg-canvas p-3 text-xs space-y-1 border border-line">
-          <div className="flex justify-between">
-            <span className="text-muted">Origin / Pickup:</span>
-            <span className="font-medium text-ink capitalize">
-              {parcel.pickupCity} {parcel.pickupZoneName ? `(${parcel.pickupZoneName})` : ''}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted">Destination:</span>
-            <span className="font-medium text-ink capitalize">{parcel.dropoffCity}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted">Size & Weight:</span>
-            <span className="font-medium text-ink">
-              {parcel.size} &middot; {parcel.weightKg} kg
-            </span>
-          </div>
-        </div>
-
-        <form onSubmit={handleAssign} className="mt-5 space-y-4">
-          <FormField
-            label="Courier"
-            htmlFor="courier-select"
-            help={
-              loadingCouriers
-                ? 'Loading courier workloads...'
-                : couriers.length === 0
-                  ? 'No couriers registered in the system.'
-                  : undefined
-            }
-          >
-            <Select
-              id="courier-select"
-              value={selectedCourierId}
-              onChange={(e) => setSelectedCourierId(e.target.value)}
-              disabled={loadingCouriers || submitting}
-            >
-              <option value="">-- Choose Courier --</option>
-              {couriers.map((c) => {
-                const isFull = c.activeParcels >= c.maxActiveParcels;
-                const statusTag = !c.isAvailable
-                  ? ' [Unavailable]'
-                  : isFull
-                    ? ' [Full Capacity]'
-                    : '';
-                const zoneTag = c.zoneName ? ` (${c.zoneName})` : '';
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium text-ink">Courier</legend>
+          {loadingCouriers ? (
+            <div className="space-y-2" aria-label="Loading courier workloads">
+              <Skeleton className="h-14 w-full" />
+              <Skeleton className="h-14 w-full" />
+            </div>
+          ) : couriers.length === 0 ? (
+            <p className="text-sm text-muted">No couriers registered in the system.</p>
+          ) : (
+            <ul className="max-h-80 space-y-2 overflow-y-auto pr-1">
+              {sorted.map((c) => {
+                const disabled = !hasCapacity(c);
+                const selected = c.courierId === selectedCourierId;
+                const pct = utilisationPct(c);
+                const state = courierState(c);
                 return (
-                  <option key={c.courierId} value={c.courierId} disabled={!c.isAvailable || isFull}>
-                    {c.name}
-                    {zoneTag} — {c.activeParcels}/{c.maxActiveParcels} active{statusTag}
-                  </option>
+                  <li key={c.courierId}>
+                    <label
+                      className={cn(
+                        'flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition',
+                        selected
+                          ? 'border-brand bg-brand-soft/50 ring-2 ring-ring'
+                          : 'border-line hover:border-line-strong hover:bg-surface-2',
+                        disabled && 'cursor-not-allowed opacity-55 hover:bg-transparent',
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="courier"
+                        value={c.courierId}
+                        checked={selected}
+                        disabled={disabled || submitting}
+                        onChange={() => setSelectedCourierId(c.courierId)}
+                        className="h-4 w-4 accent-brand"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-medium text-ink">{c.name}</span>
+                          <Badge tone={state.tone} dot>
+                            {state.label}
+                          </Badge>
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-3">
+                          <ProgressBar
+                            value={pct}
+                            tone="auto"
+                            size="sm"
+                            label={`${c.name} capacity`}
+                          />
+                          <span className="shrink-0 text-xs text-muted tabular-nums">
+                            {c.activeParcels}/{c.maxActiveParcels} active
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-muted">{c.zoneName ?? 'Unassigned zone'}</p>
+                      </div>
+                    </label>
+                  </li>
                 );
               })}
-            </Select>
-          </FormField>
-
-          {selectedCourier && (
-            <div className="rounded-md border border-line p-3 text-xs space-y-1">
-              <div className="flex justify-between">
-                <span className="text-muted">Active Workload:</span>
-                <span className="font-medium">
-                  {selectedCourier.activeParcels} / {selectedCourier.maxActiveParcels} parcels
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted">Zone:</span>
-                <span className="font-medium">{selectedCourier.zoneName ?? 'Unassigned zone'}</span>
-              </div>
-              <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
-                <div
-                  className="bg-brand h-2 rounded-full transition-all"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      (selectedCourier.activeParcels / selectedCourier.maxActiveParcels) * 100,
-                    )}%`,
-                  }}
-                />
-              </div>
-            </div>
+            </ul>
           )}
-
-          <div className="mt-6 flex justify-end gap-3 pt-3 border-t border-line">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={submitting || !selectedCourierId || loadingCouriers}>
-              {submitting ? 'Assigning...' : 'Confirm Assignment'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </fieldset>
+      </form>
+    </Modal>
   );
 }

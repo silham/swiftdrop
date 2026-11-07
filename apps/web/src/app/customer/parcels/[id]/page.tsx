@@ -22,7 +22,14 @@ export default async function CustomerParcelsDetailPage({
   if (!data) {
     return (
       <>
-        <PageHeader title="Delivery details" description="Status history and receipt" />
+        <PageHeader
+          title="Delivery details"
+          description="Status history and receipt"
+          breadcrumbs={[
+            { label: 'My deliveries', href: '/customer' },
+            { label: 'Delivery details' },
+          ]}
+        />
         <Alert tone="error">{errorMessage(error, 'Unable to load this delivery')}</Alert>
       </>
     );

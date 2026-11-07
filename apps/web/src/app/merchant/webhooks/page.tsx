@@ -10,7 +10,8 @@ export default async function MerchantWebhooksPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={'Webhooks'}
+        eyebrow="Developers"
+        title="Webhooks"
         description="Endpoints, HMAC signing secrets and delivery attempts for automated order updates."
       />
       <WebhooksManager />

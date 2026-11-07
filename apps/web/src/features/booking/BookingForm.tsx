@@ -4,7 +4,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { PARCEL_SIZES } from '@swiftdrop/contracts';
-import { Alert, Button, Card, FormField, Input, Select, Textarea } from '@/components/ui';
+import { Calculator, MapPin, Package, UserRound } from 'lucide-react';
+import {
+  Alert,
+  Button,
+  buttonClasses,
+  Card,
+  FormField,
+  Input,
+  Select,
+  Textarea,
+} from '@/components/ui';
 import { api } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import {
@@ -117,28 +127,26 @@ export function BookingForm() {
 
   if (created) {
     return (
-      <Card className="max-w-2xl" aria-live="polite">
-        <Alert tone="success">Your delivery has been booked.</Alert>
-        <h2 className="mt-5 text-xl font-semibold">Tracking number</h2>
-        <p className="mt-2 break-all font-mono text-2xl font-semibold tracking-wide">
-          {created.trackingNumber}
-        </p>
-        <p className="mt-2 text-sm text-muted">
-          Keep this number to follow the delivery from pickup to completion.
-        </p>
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <Link
-            href={`/customer/parcels/${created.id}`}
-            className="rounded-md bg-brand px-4 py-2 text-center text-sm font-medium text-white hover:bg-brand-dark"
-          >
-            View delivery
-          </Link>
-          <Link
-            href="/customer"
-            className="rounded-md border border-line bg-surface px-4 py-2 text-center text-sm font-medium hover:bg-canvas"
-          >
-            My deliveries
-          </Link>
+      <Card flush className="max-w-2xl" aria-live="polite">
+        <div className="p-6">
+          <Alert tone="success">Your delivery has been booked.</Alert>
+          <h2 className="mt-6 text-sm font-medium tracking-wide text-muted uppercase">
+            Tracking number
+          </h2>
+          <p className="mt-2 font-mono text-3xl font-semibold tracking-wide break-all text-ink">
+            {created.trackingNumber}
+          </p>
+          <p className="mt-2 text-sm text-muted">
+            Keep this number to follow the delivery from pickup to completion.
+          </p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <Link href={`/customer/parcels/${created.id}`} className={buttonClasses()}>
+              View delivery
+            </Link>
+            <Link href="/customer" className={buttonClasses({ variant: 'secondary' })}>
+              My deliveries
+            </Link>
+          </div>
         </div>
       </Card>
     );
@@ -148,7 +156,7 @@ export function BookingForm() {
     <form
       onSubmit={confirmBooking}
       noValidate
-      className="max-w-4xl space-y-6"
+      className="space-y-6"
       aria-busy={estimating || submitting}
     >
       {(estimateError || submitError) && (
@@ -178,250 +186,323 @@ export function BookingForm() {
         </Alert>
       )}
 
-      <Card className="space-y-8">
-        <section aria-labelledby="sender-heading">
-          <h2 id="sender-heading" className="text-lg font-semibold">
-            Sender and pickup
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Who is sending the parcel and where to collect it.
-          </p>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <FormField label="Sender name" htmlFor="senderName" error={errors.senderName}>
-              <Input
-                id="senderName"
-                autoComplete="name"
-                required
-                maxLength={100}
-                value={values.senderName}
-                aria-invalid={Boolean(errors.senderName)}
-                onChange={(event) => setField('senderName', event.target.value)}
-              />
-            </FormField>
-            <FormField label="Sender phone" htmlFor="senderPhone" error={errors.senderPhone}>
-              <Input
-                id="senderPhone"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                required
-                placeholder="+94771234567"
-                value={values.senderPhone}
-                aria-invalid={Boolean(errors.senderPhone)}
-                onChange={(event) => setField('senderPhone', event.target.value)}
-              />
-            </FormField>
-            <FormField label="Pickup address" htmlFor="pickupAddress" error={errors.pickupAddress}>
-              <Input
-                id="pickupAddress"
-                autoComplete="street-address"
-                required
-                maxLength={200}
-                value={values.pickupAddress}
-                aria-invalid={Boolean(errors.pickupAddress)}
-                onChange={(event) => setField('pickupAddress', event.target.value)}
-              />
-            </FormField>
-            <FormField label="Pickup city" htmlFor="pickupCity" error={errors.pickupCity}>
-              <Input
-                id="pickupCity"
-                autoComplete="address-level2"
-                required
-                maxLength={80}
-                value={values.pickupCity}
-                aria-invalid={Boolean(errors.pickupCity)}
-                onChange={(event) => setField('pickupCity', event.target.value)}
-              />
-            </FormField>
-          </div>
-        </section>
-
-        <section aria-labelledby="recipient-heading" className="border-t border-line pt-8">
-          <h2 id="recipient-heading" className="text-lg font-semibold">
-            Recipient and drop-off
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Who will receive the parcel and where to deliver it.
-          </p>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <FormField label="Recipient name" htmlFor="recipientName" error={errors.recipientName}>
-              <Input
-                id="recipientName"
-                autoComplete="name"
-                required
-                maxLength={100}
-                value={values.recipientName}
-                aria-invalid={Boolean(errors.recipientName)}
-                onChange={(event) => setField('recipientName', event.target.value)}
-              />
-            </FormField>
-            <FormField
-              label="Recipient phone"
-              htmlFor="recipientPhone"
-              error={errors.recipientPhone}
-            >
-              <Input
-                id="recipientPhone"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                required
-                placeholder="+94771234567"
-                value={values.recipientPhone}
-                aria-invalid={Boolean(errors.recipientPhone)}
-                onChange={(event) => setField('recipientPhone', event.target.value)}
-              />
-            </FormField>
-            <FormField
-              label="Recipient email (optional)"
-              htmlFor="recipientEmail"
-              error={errors.recipientEmail}
-            >
-              <Input
-                id="recipientEmail"
-                type="email"
-                autoComplete="email"
-                value={values.recipientEmail}
-                aria-invalid={Boolean(errors.recipientEmail)}
-                onChange={(event) => setField('recipientEmail', event.target.value)}
-              />
-            </FormField>
-            <div className="hidden sm:block" aria-hidden="true" />
-            <FormField
-              label="Drop-off address"
-              htmlFor="dropoffAddress"
-              error={errors.dropoffAddress}
-            >
-              <Input
-                id="dropoffAddress"
-                autoComplete="street-address"
-                required
-                maxLength={200}
-                value={values.dropoffAddress}
-                aria-invalid={Boolean(errors.dropoffAddress)}
-                onChange={(event) => setField('dropoffAddress', event.target.value)}
-              />
-            </FormField>
-            <FormField label="Drop-off city" htmlFor="dropoffCity" error={errors.dropoffCity}>
-              <Input
-                id="dropoffCity"
-                autoComplete="address-level2"
-                required
-                maxLength={80}
-                value={values.dropoffCity}
-                aria-invalid={Boolean(errors.dropoffCity)}
-                onChange={(event) => setField('dropoffCity', event.target.value)}
-              />
-            </FormField>
-          </div>
-        </section>
-
-        <section aria-labelledby="parcel-heading" className="border-t border-line pt-8">
-          <h2 id="parcel-heading" className="text-lg font-semibold">
-            Parcel details
-          </h2>
-          <p className="mt-1 text-sm text-muted">Size and weight determine the delivery price.</p>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <FormField label="Parcel size" htmlFor="size" error={errors.size}>
-              <Select
-                id="size"
-                required
-                value={values.size}
-                aria-invalid={Boolean(errors.size)}
-                onChange={(event) => setField('size', event.target.value as FormValues['size'])}
-              >
-                <option value="">Select a size</option>
-                {PARCEL_SIZES.map((size) => (
-                  <option key={size} value={size}>
-                    {size.charAt(0) + size.slice(1).toLowerCase()}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-            <FormField
-              label="Weight (kg)"
-              htmlFor="weightKg"
-              error={errors.weightKg}
-              help="Maximum 100 kg"
-            >
-              <Input
-                id="weightKg"
-                type="number"
-                inputMode="decimal"
-                min="0.01"
-                max="100"
-                step="0.01"
-                required
-                value={values.weightKg}
-                aria-invalid={Boolean(errors.weightKg)}
-                onChange={(event) => setField('weightKg', event.target.value)}
-              />
-            </FormField>
-            <div className="sm:col-span-2">
+      <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
+          <FormSection
+            step={1}
+            id="sender-heading"
+            title="Sender and pickup"
+            description="Who is sending the parcel and where to collect it."
+            icon={<MapPin />}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Sender name" htmlFor="senderName" error={errors.senderName}>
+                <Input
+                  id="senderName"
+                  autoComplete="name"
+                  required
+                  maxLength={100}
+                  value={values.senderName}
+                  aria-invalid={Boolean(errors.senderName)}
+                  onChange={(event) => setField('senderName', event.target.value)}
+                />
+              </FormField>
+              <FormField label="Sender phone" htmlFor="senderPhone" error={errors.senderPhone}>
+                <Input
+                  id="senderPhone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  required
+                  placeholder="+94771234567"
+                  value={values.senderPhone}
+                  aria-invalid={Boolean(errors.senderPhone)}
+                  onChange={(event) => setField('senderPhone', event.target.value)}
+                />
+              </FormField>
               <FormField
-                label="Description (optional)"
-                htmlFor="description"
-                error={errors.description}
-                help={`${values.description.length}/500 characters`}
+                label="Pickup address"
+                htmlFor="pickupAddress"
+                error={errors.pickupAddress}
               >
-                <Textarea
-                  id="description"
-                  rows={3}
-                  maxLength={500}
-                  value={values.description}
-                  aria-invalid={Boolean(errors.description)}
-                  onChange={(event) => setField('description', event.target.value)}
+                <Input
+                  id="pickupAddress"
+                  autoComplete="street-address"
+                  required
+                  maxLength={200}
+                  value={values.pickupAddress}
+                  aria-invalid={Boolean(errors.pickupAddress)}
+                  onChange={(event) => setField('pickupAddress', event.target.value)}
+                />
+              </FormField>
+              <FormField label="Pickup city" htmlFor="pickupCity" error={errors.pickupCity}>
+                <Input
+                  id="pickupCity"
+                  autoComplete="address-level2"
+                  required
+                  maxLength={80}
+                  value={values.pickupCity}
+                  aria-invalid={Boolean(errors.pickupCity)}
+                  onChange={(event) => setField('pickupCity', event.target.value)}
                 />
               </FormField>
             </div>
-          </div>
-        </section>
-      </Card>
+          </FormSection>
 
-      <div className="rounded-lg border border-line bg-surface p-5" aria-live="polite">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="font-semibold">Delivery price</h2>
-            {estimate ? (
-              <>
-                <p className="mt-1 text-2xl font-semibold text-brand">{formatFee(estimate)}</p>
-                <p className="mt-1 text-xs text-muted">Based on {estimate.ruleName}</p>
-              </>
-            ) : (
-              <p className="mt-1 text-sm text-muted">
-                Enter both cities, size and weight to request a price.
-              </p>
-            )}
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full sm:w-auto"
-            disabled={estimating || submitting}
-            aria-busy={estimating}
-            onClick={getEstimate}
+          <FormSection
+            step={2}
+            id="recipient-heading"
+            title="Recipient and drop-off"
+            description="Who will receive the parcel and where to deliver it."
+            icon={<UserRound />}
           >
-            {estimating ? 'Getting price...' : estimate ? 'Refresh price' : 'Get price'}
-          </Button>
-        </div>
-      </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                label="Recipient name"
+                htmlFor="recipientName"
+                error={errors.recipientName}
+              >
+                <Input
+                  id="recipientName"
+                  autoComplete="name"
+                  required
+                  maxLength={100}
+                  value={values.recipientName}
+                  aria-invalid={Boolean(errors.recipientName)}
+                  onChange={(event) => setField('recipientName', event.target.value)}
+                />
+              </FormField>
+              <FormField
+                label="Recipient phone"
+                htmlFor="recipientPhone"
+                error={errors.recipientPhone}
+              >
+                <Input
+                  id="recipientPhone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  required
+                  placeholder="+94771234567"
+                  value={values.recipientPhone}
+                  aria-invalid={Boolean(errors.recipientPhone)}
+                  onChange={(event) => setField('recipientPhone', event.target.value)}
+                />
+              </FormField>
+              <FormField
+                label="Recipient email (optional)"
+                htmlFor="recipientEmail"
+                error={errors.recipientEmail}
+              >
+                <Input
+                  id="recipientEmail"
+                  type="email"
+                  autoComplete="email"
+                  value={values.recipientEmail}
+                  aria-invalid={Boolean(errors.recipientEmail)}
+                  onChange={(event) => setField('recipientEmail', event.target.value)}
+                />
+              </FormField>
+              <div className="hidden sm:block" aria-hidden="true" />
+              <FormField
+                label="Drop-off address"
+                htmlFor="dropoffAddress"
+                error={errors.dropoffAddress}
+              >
+                <Input
+                  id="dropoffAddress"
+                  autoComplete="street-address"
+                  required
+                  maxLength={200}
+                  value={values.dropoffAddress}
+                  aria-invalid={Boolean(errors.dropoffAddress)}
+                  onChange={(event) => setField('dropoffAddress', event.target.value)}
+                />
+              </FormField>
+              <FormField label="Drop-off city" htmlFor="dropoffCity" error={errors.dropoffCity}>
+                <Input
+                  id="dropoffCity"
+                  autoComplete="address-level2"
+                  required
+                  maxLength={80}
+                  value={values.dropoffCity}
+                  aria-invalid={Boolean(errors.dropoffCity)}
+                  onChange={(event) => setField('dropoffCity', event.target.value)}
+                />
+              </FormField>
+            </div>
+          </FormSection>
 
-      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-        <Link
-          href="/customer"
-          className="px-3 py-2 text-center text-sm font-medium text-muted hover:text-ink"
-        >
-          Cancel
-        </Link>
-        <Button
-          type="submit"
-          className="w-full sm:w-auto"
-          disabled={!estimate || submitting || estimating}
-          aria-busy={submitting}
-        >
-          {submitting ? 'Confirming...' : 'Confirm booking'}
-        </Button>
+          <FormSection
+            step={3}
+            id="parcel-heading"
+            title="Parcel details"
+            description="Size and weight determine the delivery price."
+            icon={<Package />}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Parcel size" htmlFor="size" error={errors.size}>
+                <Select
+                  id="size"
+                  required
+                  value={values.size}
+                  aria-invalid={Boolean(errors.size)}
+                  onChange={(event) => setField('size', event.target.value as FormValues['size'])}
+                >
+                  <option value="">Select a size</option>
+                  {PARCEL_SIZES.map((size) => (
+                    <option key={size} value={size}>
+                      {size.charAt(0) + size.slice(1).toLowerCase()}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+              <FormField
+                label="Weight (kg)"
+                htmlFor="weightKg"
+                error={errors.weightKg}
+                help="Maximum 100 kg"
+              >
+                <Input
+                  id="weightKg"
+                  type="number"
+                  inputMode="decimal"
+                  min="0.01"
+                  max="100"
+                  step="0.01"
+                  required
+                  value={values.weightKg}
+                  aria-invalid={Boolean(errors.weightKg)}
+                  onChange={(event) => setField('weightKg', event.target.value)}
+                />
+              </FormField>
+              <div className="sm:col-span-2">
+                <FormField
+                  label="Description (optional)"
+                  htmlFor="description"
+                  error={errors.description}
+                  help={`${values.description.length}/500 characters`}
+                >
+                  <Textarea
+                    id="description"
+                    rows={3}
+                    maxLength={500}
+                    value={values.description}
+                    aria-invalid={Boolean(errors.description)}
+                    onChange={(event) => setField('description', event.target.value)}
+                  />
+                </FormField>
+              </div>
+            </div>
+          </FormSection>
+        </div>
+
+        <aside className="lg:sticky lg:top-24" aria-label="Booking summary">
+          <Card flush>
+            <div className="border-b border-line px-5 py-4" aria-live="polite">
+              <h2 className="text-sm font-semibold text-ink">Delivery price</h2>
+              {estimate ? (
+                <>
+                  <p className="mt-2 text-3xl font-semibold text-ink tabular-nums">
+                    {formatFee(estimate)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">Based on {estimate.ruleName}</p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-muted">
+                  Enter both cities, size and weight to request a price.
+                </p>
+              )}
+            </div>
+            <dl className="space-y-3 px-5 py-4 text-sm">
+              <SummaryRow label="From" value={values.pickupCity} />
+              <SummaryRow label="To" value={values.dropoffCity} />
+              <SummaryRow
+                label="Size"
+                value={
+                  values.size ? values.size.charAt(0) + values.size.slice(1).toLowerCase() : ''
+                }
+              />
+              <SummaryRow label="Weight" value={values.weightKg ? `${values.weightKg} kg` : ''} />
+            </dl>
+            <div className="space-y-3 border-t border-line bg-surface-2/60 px-5 py-4">
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                disabled={estimating || submitting}
+                aria-busy={estimating}
+                onClick={getEstimate}
+              >
+                <Calculator className="h-4 w-4" aria-hidden="true" />
+                {estimating ? 'Getting price...' : estimate ? 'Refresh price' : 'Get price'}
+              </Button>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={!estimate || submitting || estimating}
+                aria-busy={submitting}
+              >
+                {submitting ? 'Confirming...' : 'Confirm booking'}
+              </Button>
+              <Link
+                href="/customer"
+                className="block py-1 text-center text-sm font-medium text-muted hover:text-ink"
+              >
+                Cancel
+              </Link>
+            </div>
+          </Card>
+        </aside>
       </div>
     </form>
+  );
+}
+
+function FormSection({
+  step,
+  id,
+  title,
+  description,
+  icon,
+  children,
+}: {
+  step: number;
+  id: string;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section aria-labelledby={id} className="rounded-xl border border-line bg-surface shadow-card">
+      <div className="flex items-start gap-3 border-b border-line px-5 py-4">
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-soft text-sm font-semibold text-brand"
+          aria-hidden="true"
+        >
+          {step}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 id={id} className="text-base font-semibold text-ink">
+            {title}
+          </h2>
+          <p className="mt-0.5 text-sm text-muted">{description}</p>
+        </div>
+        <span className="hidden text-subtle sm:block [&_svg]:h-5 [&_svg]:w-5" aria-hidden="true">
+          {icon}
+        </span>
+      </div>
+      <div className="p-5">{children}</div>
+    </section>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-muted">{label}</dt>
+      <dd className="truncate font-medium text-ink capitalize">{value.trim() || '—'}</dd>
+    </div>
   );
 }

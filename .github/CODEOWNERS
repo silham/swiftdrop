@@ -41,21 +41,21 @@
 /apps/web/src/proxy.ts                      @swiftdrop-m02
 /apps/web/src/lib/auth/                     @swiftdrop-m02
 /apps/web/src/features/auth/                @swiftdrop-m02
-/apps/web/src/app/(public)/login/           @swiftdrop-m02
-/apps/web/src/app/(public)/register/        @swiftdrop-m02
+/apps/web/src/app/(auth)/login/             @swiftdrop-m02
+/apps/web/src/app/(auth)/register/          @swiftdrop-m02
 /apps/web/src/app/admin/users/              @swiftdrop-m02
 
 # M3 customer & booking
 /apps/api/src/modules/bookings/             @swiftdrop-m03
 /apps/api/test/bookings/                    @swiftdrop-m03
 /apps/web/src/app/customer/                 @swiftdrop-m03
-/apps/web/src/app/page.tsx                  @swiftdrop-m03
+/apps/web/src/app/(marketing)/page.tsx      @swiftdrop-m03
 /apps/web/src/features/booking/             @swiftdrop-m03
 
 # M4 parcel lifecycle & tracking
 /apps/api/src/modules/parcels/              @swiftdrop-m04
 /apps/api/test/parcels/                     @swiftdrop-m04
-/apps/web/src/app/(public)/track/           @swiftdrop-m04
+/apps/web/src/app/(marketing)/track/        @swiftdrop-m04
 /apps/web/src/features/tracking/            @swiftdrop-m04
 
 # M5 merchants
@@ -63,7 +63,7 @@
 /apps/api/src/modules/merchant-api/         @swiftdrop-m05
 /apps/api/test/merchants/                   @swiftdrop-m05
 /apps/web/src/app/merchant/                 @swiftdrop-m05
-/apps/web/src/app/(public)/merchant-signup/ @swiftdrop-m05
+/apps/web/src/app/(auth)/merchant-signup/   @swiftdrop-m05
 /apps/web/src/app/admin/merchants/          @swiftdrop-m05
 /apps/web/src/features/merchant/            @swiftdrop-m05
 
