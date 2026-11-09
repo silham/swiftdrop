@@ -110,11 +110,13 @@ services:
     working_dir: /app
     environment:
       E2E_BASE_URL: http://gateway
+      MAILPIT_URL: http://mailpit:8025
       CI: 'true'
     volumes: *node-volumes
     command: sh -c "npm i -g pnpm@12.14.0 >/dev/null && pnpm --filter @swiftdrop/e2e test:e2e"
     depends_on:
       gateway: { condition: service_started }
+      mailpit: { condition: service_started }
       api: { condition: service_healthy }
       web: { condition: service_healthy }
 

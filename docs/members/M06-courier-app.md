@@ -81,4 +81,31 @@ consider moving the check into a reusable pipe.
 
 ## Status / notes
 
-_Update as you go._
+Implemented (all six endpoints, web pages, tests):
+
+- **API** (`apps/api/src/modules/courier/`): every endpoint first loads the ACTIVE assignment and
+  returns 404 unless it belongs to the caller. List/detail responses carry `nextStatuses` and
+  `canDeliver`, computed by `courier-actions.ts` from the lifecycle graph and the attempt cap, so the
+  web never offers a button the API would reject.
+- **Status updates** go through `ParcelsService.transition` inside one transaction. FAILED keeps the
+  assignment so the **same courier can re-attempt** (FAILED → OUT_FOR_DELIVERY, up to 3 attempts). The
+  third failure completes the assignment in the same transaction, so workload drops and the parcel
+  shows in history; dispatch can no longer assign it (`MAX_ATTEMPTS_REACHED`).
+- **Proof of delivery**: parcel must be OUT_FOR_DELIVERY (409 otherwise, nothing stored); photo
+  required (422 `PROOF_REQUIRED`), ≤ `UPLOAD_MAX_BYTES` (413 `FILE_TOO_LARGE`), magic bytes must be
+  JPEG/PNG/WebP (400 `UNSUPPORTED_FILE`, see `file-type.ts`). Object key `pod/<parcelId>/<uuid>.<ext>`.
+  ProofOfDelivery + DELIVERED + `completeAssignment` run in one transaction; the object is deleted if
+  it fails. Multer keeps a 10 MB hard ceiling; the real limit is checked in the service so the
+  error code is right.
+- **Photo viewing**: courier who captured it, DISPATCHER, ADMIN and the owning customer; everyone else 404. `Cache-Control: private, no-store`.
+- **History**: my COMPLETED assignments (DELIVERED, or FAILED on the last attempt), paginated.
+- **Web** (`/courier`, `/courier/parcels/[id]`, `/courier/history`): mobile-first cards, `tel:` and maps
+  links, status buttons, a Failed dialog (`FAILURE_REASONS`) and a Deliver dialog with a camera
+  input. Uploads use `fetch` with one silent-refresh retry.
+- **Tests**: unit (`file-type`, `courier-actions`, `courier.service`), integration
+  (`apps/api/test/courier/`, 24 cases incl. cross-courier 404s, role checks, upload validation,
+  re-attempt flow, photo access matrix), web unit (`features/courier/actions.test.ts`), e2e
+  (`courier-deliver.spec.ts` with `@mobile`, plus the full `delivery-journey.spec.ts`).
+
+Known gaps: no upload progress bar (the dialog shows an "Uploading…" state); web unit tests are not
+yet run in CI (`apps/web` `test` script is a placeholder).

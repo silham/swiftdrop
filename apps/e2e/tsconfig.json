@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "noEmit": true, "types": ["node"] },
-  "include": ["tests", "playwright.config.ts"]
+  "include": ["tests", "support", "global-setup.ts", "playwright.config.ts"]
 }

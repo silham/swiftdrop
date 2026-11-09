@@ -28,6 +28,7 @@ import {
   Tabs,
 } from '@/components/ui';
 import { formatDate, formatDateTime, formatNumber } from '@/lib/format';
+import { LiveParcelStatus } from './LiveParcelStatus';
 import type { components } from '@/lib/api/schema';
 import { CustomerPagination } from './CustomerPagination';
 import { ProofOfDeliveryPhoto } from './ProofOfDeliveryPhoto';
@@ -337,7 +338,13 @@ export function ParcelDetails({ parcel }: { parcel: CustomerParcel }) {
       <PageHeader
         title={parcel.trackingNumber}
         description={`${parcel.pickupCity} to ${parcel.dropoffCity}`}
-        meta={<StatusBadge status={status} />}
+        meta={
+          <LiveParcelStatus
+            trackingNumber={parcel.trackingNumber}
+            status={status}
+            updatedAt={parcel.history[parcel.history.length - 1]?.at ?? parcel.createdAt}
+          />
+        }
         breadcrumbs={[
           { label: 'My deliveries', href: '/customer' },
           { label: parcel.trackingNumber },

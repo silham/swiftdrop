@@ -41,6 +41,18 @@ stateDiagram-v2
 6. Concurrency: update with `where: { id, status: from }`. If no row matches, someone else changed
    the parcel first; throw 409.
 
+## Courier assignment rules
+
+- The assigned courier owns a parcel from assignment until it is DELIVERED or has used all attempts.
+- **FAILED keeps the ACTIVE assignment**, so the same courier can re-attempt
+  (FAILED → OUT_FOR_DELIVERY) while `deliveryAttempts < MAX_DELIVERY_ATTEMPTS`.
+- The **last allowed failure completes the assignment** in the same transaction (the courier's workload
+  drops and the parcel appears in their history). Dispatch cannot assign such a parcel
+  (409 `MAX_ATTEMPTS_REACHED`); it stays FAILED.
+- A dispatcher may **unassign** a parcel that is CREATED, PICKED_UP or FAILED (cancels the assignment);
+  a FAILED parcel with attempts left then returns to the unassigned queue for another courier.
+- DELIVERED completes the assignment, in the same transaction as the proof of delivery.
+
 ## Tracking numbers
 
 The format is `SD` followed by 9 digits (`SD123456789`), random and unique, retried on collision.

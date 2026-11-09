@@ -211,6 +211,58 @@ describe('DispatchService (Unit)', () => {
     });
   });
 
+  describe('Failed parcels (re-attempt rules)', () => {
+    it('rejects assigning a FAILED parcel that has used all delivery attempts', async () => {
+      prismaMock.parcel.findUnique.mockResolvedValue({
+        ...mockParcel,
+        status: 'FAILED',
+        deliveryAttempts: 3,
+      });
+
+      await expect(
+        service.assign(mockDispatcher, { parcelId: mockParcel.id, courierId: mockCourierUser.id }),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          code: ERROR_CODES.MAX_ATTEMPTS_REACHED,
+          status: HttpStatus.CONFLICT,
+        }),
+      );
+      expect(prismaMock.courierAssignment.create).not.toHaveBeenCalled();
+    });
+
+    it('lists FAILED parcels only while they have attempts left', async () => {
+      prismaMock.parcel.findMany.mockResolvedValue([]);
+      prismaMock.parcel.count.mockResolvedValue(0);
+
+      await service.listUnassigned({ page: 1, pageSize: 20 } as never);
+
+      expect(prismaMock.parcel.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ status: 'CREATED' }, { status: 'FAILED', deliveryAttempts: { lt: 3 } }],
+          }),
+        }),
+      );
+    });
+
+    it('lets a dispatcher unassign a FAILED parcel so another courier can take it', async () => {
+      prismaMock.courierAssignment.findUnique.mockResolvedValue({
+        id: 'assign-1',
+        parcelId: mockParcel.id,
+        courierId: mockCourierUser.id,
+        status: 'ACTIVE',
+        parcel: { id: mockParcel.id, status: 'FAILED', trackingNumber: mockParcel.trackingNumber },
+      });
+
+      const res = await service.unassign(mockDispatcher, 'assign-1');
+      expect(res.success).toBe(true);
+      expect(prismaMock.courierAssignment.update).toHaveBeenCalledWith({
+        where: { id: 'assign-1' },
+        data: { status: 'CANCELLED' },
+      });
+    });
+  });
+
   describe('Courier Unassignment', () => {
     it('cancels active assignment when parcel is in CREATED status', async () => {
       prismaMock.courierAssignment.findUnique.mockResolvedValue({

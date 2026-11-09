@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { ERROR_CODES } from '@swiftdrop/contracts';
+import { ERROR_CODES, MAX_DELIVERY_ATTEMPTS } from '@swiftdrop/contracts';
 import type { CourierAssignment, Prisma } from '@swiftdrop/db';
 import type { AuthUser } from '../../common/auth';
 import { AppError, notFound } from '../../common/errors/app-error';
@@ -14,6 +14,8 @@ import type {
   ListUnassignedQuery,
   UnassignedParcelDto,
 } from './dto/dispatch.dto';
+
+const UNASSIGNABLE_STATUSES: readonly string[] = ['CREATED', 'PICKED_UP', 'FAILED'];
 
 /**
  * PUBLIC SERVICE — courier assignment and workload management.
@@ -48,7 +50,7 @@ export class DispatchService {
   }
 
   /**
-   * Lists unassigned parcels (status CREATED or FAILED with no ACTIVE assignment).
+   * Lists unassigned parcels (CREATED, or FAILED with attempts left, and no ACTIVE assignment).
    * Filterable by zoneId, sorted oldest first. Omits sensitive recipient contact info.
    */
   async listUnassigned(q: ListUnassignedQuery) {
@@ -57,7 +59,11 @@ export class DispatchService {
     const skip = (page - 1) * pageSize;
 
     const where: Prisma.ParcelWhereInput = {
-      status: { in: ['CREATED', 'FAILED'] },
+      // A FAILED parcel is only assignable while it still has attempts left.
+      OR: [
+        { status: 'CREATED' },
+        { status: 'FAILED', deliveryAttempts: { lt: MAX_DELIVERY_ATTEMPTS } },
+      ],
       assignments: {
         none: { status: 'ACTIVE' },
       },
@@ -121,6 +127,15 @@ export class DispatchService {
           ERROR_CODES.INVALID_STATUS_TRANSITION,
           `Cannot assign parcel in status ${parcel.status}. Status must be CREATED or FAILED.`,
           HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      if (parcel.status === 'FAILED' && parcel.deliveryAttempts >= MAX_DELIVERY_ATTEMPTS) {
+        throw new AppError(
+          ERROR_CODES.MAX_ATTEMPTS_REACHED,
+          `Parcel ${parcel.trackingNumber} has used all ${MAX_DELIVERY_ATTEMPTS} delivery attempts`,
+          HttpStatus.CONFLICT,
+          { deliveryAttempts: parcel.deliveryAttempts, maxAttempts: MAX_DELIVERY_ATTEMPTS },
         );
       }
 
@@ -214,8 +229,9 @@ export class DispatchService {
   }
 
   /**
-   * Unassign courier from parcel. Allowed only while parcel is still CREATED or PICKED_UP.
-   * Cancels the assignment and writes an audit entry.
+   * Unassign courier from parcel. Allowed while the parcel is CREATED or PICKED_UP, or FAILED
+   * (so a dispatcher can hand a failed parcel to another courier). Cancels the assignment and
+   * writes an audit entry.
    */
   async unassign(actor: AuthUser, assignmentId: string): Promise<{ success: boolean }> {
     return this.prisma.$transaction(async (tx) => {
@@ -235,11 +251,11 @@ export class DispatchService {
         );
       }
 
-      // Only allow unassigning if parcel is still in early stages
-      if (assignment.parcel.status !== 'CREATED' && assignment.parcel.status !== 'PICKED_UP') {
+      // Only allow unassigning before the parcel is on the road, or after a failed attempt
+      if (!UNASSIGNABLE_STATUSES.includes(assignment.parcel.status)) {
         throw new AppError(
           ERROR_CODES.INVALID_STATUS_TRANSITION,
-          `Cannot unassign courier for parcel in status ${assignment.parcel.status}. Unassign is only allowed for CREATED or PICKED_UP parcels.`,
+          `Cannot unassign courier for parcel in status ${assignment.parcel.status}. Unassign is only allowed for CREATED, PICKED_UP or FAILED parcels.`,
           HttpStatus.BAD_REQUEST,
         );
       }

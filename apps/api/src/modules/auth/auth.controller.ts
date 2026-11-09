@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, Post, Query, Req, Res } from '@nestjs/
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AUTH_COOKIES } from '@swiftdrop/contracts';
+import { AppError } from '../../common/errors/app-error';
 import type { Request, Response } from 'express';
 import { Public, TokenService } from '../../common/auth';
 import { AuthService, type IssuedSession } from './auth.service';
@@ -48,6 +49,28 @@ export class AuthController {
       res,
       await this.auth.refresh(req.cookies?.[AUTH_COOKIES.REFRESH], meta(req)),
     );
+  }
+
+  /**
+   * Page-load session resume. The refresh cookie is scoped to /api/v1/auth, so the web proxy can't
+   * see it; when the short-lived access cookie has expired the proxy sends the browser here. We
+   * rotate the session and bounce back to `next`, or to /login when the refresh token is invalid.
+   */
+  @Get('resume')
+  @ApiOperation({ summary: 'Refresh the session, then redirect to `next` (or /login)' })
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  async resume(@Query('next') next: string | undefined, @Req() req: Request, @Res() res: Response) {
+    const target = safeNextPath(next);
+    let session: IssuedSession;
+    try {
+      session = await this.auth.refresh(req.cookies?.[AUTH_COOKIES.REFRESH], meta(req));
+    } catch (err) {
+      if (!(err instanceof AppError)) throw err;
+      this.tokens.clearAuthCookies(res);
+      return res.redirect(target ? `/login?next=${encodeURIComponent(target)}` : '/login');
+    }
+    this.startSession(res, session);
+    return res.redirect(target ?? session.home);
   }
 
   @Post('logout')
@@ -102,3 +125,16 @@ export class AuthController {
 }
 
 const meta = (req: Request) => ({ userAgent: req.headers['user-agent'], ip: req.ip });
+
+/**
+ * Only same-site page paths are allowed as a redirect target: "/customer" yes; "//evil.com",
+ * "/\\evil.com", "https://…" and API paths no (open-redirect and loop protection).
+ */
+export function safeNextPath(next: unknown): string | null {
+  if (typeof next !== 'string' || next.length > 512) return null;
+  if (!next.startsWith('/') || next.startsWith('//')) return null;
+  // Backslashes and control characters can be read as "//" by browsers.
+  if ([...next].some((ch) => ch === '\\' || ch.charCodeAt(0) < 0x20)) return null;
+  if (next === '/api' || next.startsWith('/api/')) return null;
+  return next;
+}
