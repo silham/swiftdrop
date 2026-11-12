@@ -64,6 +64,7 @@ describe('MerchantsService', () => {
       },
       webhookAttempt: {
         findMany: jest.fn(),
+        count: jest.fn(),
       },
       user: {
         delete: jest.fn(),
@@ -246,13 +247,16 @@ describe('MerchantsService', () => {
           }),
         });
 
-        expect(audit.record).toHaveBeenCalledWith({
-          actor: { id: 'user_456', role: 'MERCHANT' },
-          action: 'api_key.created',
-          entityType: 'ApiKey',
-          entityId: 'key_1',
-          metadata: { name: 'Production Shop', prefix: res.prefix },
-        });
+        expect(audit.record).toHaveBeenCalledWith(
+          {
+            actor: { id: 'user_456', role: 'MERCHANT' },
+            action: 'api_key.created',
+            entityType: 'ApiKey',
+            entityId: 'key_1',
+            metadata: { name: 'Production Shop', prefix: res.prefix },
+          },
+          prisma, // same transaction as the key
+        );
       });
     });
 
@@ -298,13 +302,16 @@ describe('MerchantsService', () => {
           data: { revokedAt: expect.any(Date) },
         });
 
-        expect(audit.record).toHaveBeenCalledWith({
-          actor: { id: 'user_456', role: 'MERCHANT' },
-          action: 'api_key.revoked',
-          entityType: 'ApiKey',
-          entityId: 'key_1',
-          metadata: { prefix: 'sd_live_12345678' },
-        });
+        expect(audit.record).toHaveBeenCalledWith(
+          {
+            actor: { id: 'user_456', role: 'MERCHANT' },
+            action: 'api_key.revoked',
+            entityType: 'ApiKey',
+            entityId: 'key_1',
+            metadata: { prefix: 'sd_live_12345678' },
+          },
+          prisma,
+        );
       });
 
       it('throws 404 when key is not found or owned by another merchant', async () => {
@@ -419,6 +426,18 @@ describe('MerchantsService', () => {
         // Verify it decrypts to the returned secret
         const decrypted = decryptWebhookSecret(encryptedInDb, encKey);
         expect(decrypted).toBe(res.secret);
+
+        // Audited with the host only (no path, no secret), in the same transaction
+        expect(audit.record).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'webhook.created',
+            entityType: 'WebhookEndpoint',
+            entityId: 'wh_1',
+            metadata: { host: 'myshop.com', eventTypes: ['parcel.status_changed'] },
+          }),
+          prisma,
+        );
+        expect(JSON.stringify(audit.record.mock.calls)).not.toContain(res.secret);
       });
 
       it('rejects HTTP URL in production environment', async () => {
@@ -466,12 +485,15 @@ describe('MerchantsService', () => {
           },
         });
 
-        expect(audit.record).toHaveBeenCalledWith({
-          actor: { id: 'user_456', role: 'MERCHANT' },
-          action: 'webhook_secret.rotated',
-          entityType: 'WebhookEndpoint',
-          entityId: 'wh_1',
-        });
+        expect(audit.record).toHaveBeenCalledWith(
+          {
+            actor: { id: 'user_456', role: 'MERCHANT' },
+            action: 'webhook_secret.rotated',
+            entityType: 'WebhookEndpoint',
+            entityId: 'wh_1',
+          },
+          prisma, // written in the same transaction as the secret change
+        );
       });
     });
 
@@ -497,6 +519,14 @@ describe('MerchantsService', () => {
 
         expect(res.isActive).toBe(false);
         expect(res.url).toBe('https://myshop.com/new-hook');
+        expect(audit.record).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'webhook.updated',
+            entityId: 'wh_1',
+            metadata: { host: 'myshop.com', isActive: false },
+          }),
+          prisma,
+        );
       });
 
       it('deletes webhook endpoint', async () => {
@@ -504,10 +534,19 @@ describe('MerchantsService', () => {
         prisma.webhookEndpoint.findFirst.mockResolvedValue({
           id: 'wh_1',
           merchantId: 'merch_789',
+          url: 'https://myshop.com/webhooks/secret-path-token',
         });
 
         await service.deleteWebhook(mockMerchantUser, 'wh_1');
         expect(prisma.webhookEndpoint.delete).toHaveBeenCalledWith({ where: { id: 'wh_1' } });
+        expect(audit.record).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'webhook.deleted',
+            entityId: 'wh_1',
+            metadata: { host: 'myshop.com' },
+          }),
+          prisma,
+        );
       });
     });
 
@@ -522,9 +561,16 @@ describe('MerchantsService', () => {
           { id: 'att_1', status: 'SUCCEEDED', responseStatus: 200 },
         ]);
 
-        const attempts = await service.listWebhookAttempts(mockMerchantUser, 'wh_1');
-        expect(attempts).toHaveLength(1);
-        expect(attempts[0].status).toBe('SUCCEEDED');
+        prisma.webhookAttempt.count.mockResolvedValue(120);
+
+        const { data, total } = await service.listWebhookAttempts(mockMerchantUser, 'wh_1');
+        expect(data).toHaveLength(1);
+        expect(data[0].status).toBe('SUCCEEDED');
+        expect(total).toBe(120);
+        // 50 per page, first page, unless asked otherwise
+        expect(prisma.webhookAttempt.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ skip: 0, take: 50 }),
+        );
       });
     });
   });

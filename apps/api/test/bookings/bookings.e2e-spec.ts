@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { ParcelsService } from '../../src/modules/parcels';
+import { PricingService } from '../../src/modules/pricing';
 import { createTestApp, type TestContext } from '../utils/app';
 
 const VALID_BOOKING = {
@@ -61,9 +62,8 @@ describe('customer bookings', () => {
       where: { trackingNumber: 'SD100000002' },
     });
     historyParcelId = historyParcel.id;
-    // ParcelsService.create (M4) needs PricingService.estimate (M7), which is still a stub. Bookings
-    // only maps the request and delegates, so mock the call. TODO(M3): drop the mock once M7 lands.
-    createParcel = jest.spyOn(t.app.get(ParcelsService), 'create').mockResolvedValue(seededParcel);
+    // Spy only: calls go through to the real ParcelsService.create and PricingService.estimate.
+    createParcel = jest.spyOn(t.app.get(ParcelsService), 'create');
     const common = {
       senderName: 'M03 Sender',
       senderPhone: '+94770000001',
@@ -117,23 +117,52 @@ describe('customer bookings', () => {
 
   beforeEach(() => createParcel.mockClear());
 
-  it('returns 201 with the mocked M4 tracking number and server-calculated fee', async () => {
+  it('books a parcel for real: tracking number, CREATED status and the server-calculated fee', async () => {
+    const expected = await t.app.get(PricingService).estimate({
+      pickupCity: VALID_BOOKING.pickupCity,
+      dropoffCity: VALID_BOOKING.dropoffCity,
+      size: VALID_BOOKING.size,
+      weightKg: VALID_BOOKING.weightKg,
+    });
+
     const response = await request(t.http)
       .post('/api/v1/parcels')
       .set('Cookie', await t.cookieFor('CUSTOMER', 'customer@swiftdrop.test'))
       .send(VALID_BOOKING)
       .expect(201);
 
+    // The customer id comes from the session, never from the body.
     expect(createParcel).toHaveBeenCalledWith(
       { ...VALID_BOOKING, source: 'CUSTOMER', customerId },
       'CUSTOMER',
     );
     expect(response.body).toMatchObject({
-      trackingNumber: 'SD100000001',
       status: 'CREATED',
-      feeCents: 52500,
+      feeCents: expected.feeCents,
       currency: 'LKR',
     });
+    expect(response.body.feeCents).toBeGreaterThan(0);
+    expect(response.body.trackingNumber).toMatch(/^SD\d{9}$/);
+
+    // What was stored: owned by this customer, with its first history row and a created event.
+    const stored = await t.prisma.parcel.findUniqueOrThrow({
+      where: { id: response.body.id },
+      include: { statusHistory: true },
+    });
+    expect(stored).toMatchObject({ customerId, source: 'CUSTOMER', feeCents: expected.feeCents });
+    expect(stored.statusHistory).toHaveLength(1);
+    expect(stored.statusHistory[0]).toMatchObject({ fromStatus: null, toStatus: 'CREATED' });
+    expect(
+      await t.prisma.outboxEvent.count({
+        where: {
+          eventType: 'parcel.created',
+          payload: { path: ['data', 'parcelId'], equals: stored.id },
+        },
+      }),
+    ).toBe(1);
+
+    // Remove it again so the other tests in this file (and other suites) see a stable list.
+    await t.prisma.parcel.delete({ where: { id: stored.id } });
   });
 
   it('rejects a client-sent fee before parcel creation', async () => {

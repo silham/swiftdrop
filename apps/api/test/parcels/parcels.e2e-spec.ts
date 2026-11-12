@@ -15,17 +15,6 @@ describe('parcels module (integration)', () => {
   beforeAll(async () => {
     t = await createTestApp();
     parcels = t.app.get(ParcelsService);
-
-    // PricingService.estimate is still a stub (M7). Return a fixed fee with real seeded zones.
-    const zone = await t.prisma.deliveryZone.findFirstOrThrow();
-    jest.spyOn(t.app.get(PricingService), 'estimate').mockResolvedValue({
-      feeCents: 52500,
-      currency: 'LKR',
-      pickupZoneId: zone.id,
-      dropoffZoneId: zone.id,
-      ruleId: 'test-rule',
-      ruleName: 'Test rule',
-    });
   });
 
   afterAll(async () => {
@@ -71,7 +60,14 @@ describe('parcels module (integration)', () => {
 
       expect(parcel.trackingNumber).toMatch(/^SD\d{9}$/);
       expect(parcel.status).toBe('CREATED');
-      expect(parcel.feeCents).toBe(52500);
+      // The fee comes from the real pricing rules, not from the caller.
+      const { feeCents } = await t.app.get(PricingService).estimate({
+        pickupCity: 'colombo',
+        dropoffCity: 'kandy',
+        size: 'SMALL',
+        weightKg: 1.5,
+      });
+      expect(parcel.feeCents).toBe(feeCents);
 
       const history = await t.prisma.parcelStatusHistory.findMany({
         where: { parcelId: parcel.id },

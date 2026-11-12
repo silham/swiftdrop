@@ -1,15 +1,20 @@
 # Production-like stack from the prod Dockerfile targets (no bind mounts, no hot reload).
 # `make prod-up`. Owner: M10 (finalise in Week 8; Kubernetes is a P2 stretch goal).
-# Uses the same .env — for a real deployment set NODE_ENV=production, COOKIE_SECURE=true,
-# ENABLE_DEV_LOGIN=false and fresh secrets.
+# Uses the same .env — for a real deployment use fresh secrets. NODE_ENV=production,
+# ENABLE_DEV_LOGIN=false and COOKIE_SECURE=true are set below (they override .env).
+# Secure cookies are only sent over HTTPS (Chrome and Firefox also allow http://localhost, Safari does
+# not). To try the prod stack in Safari over plain HTTP:  PROD_COOKIE_SECURE=false make prod-up
 name: swiftdrop-prod
+
+x-app-env: &app-env
+  NODE_ENV: production
+  COOKIE_SECURE: ${PROD_COOKIE_SECURE:-true}
+  ENABLE_DEV_LOGIN: 'false'
+  NEXT_PUBLIC_ENABLE_DEV_LOGIN: 'false'
 
 x-app: &app
   env_file: .env
-  environment:
-    NODE_ENV: production
-    ENABLE_DEV_LOGIN: 'false'
-    NEXT_PUBLIC_ENABLE_DEV_LOGIN: 'false'
+  environment: *app-env
   restart: unless-stopped
 
 services:
@@ -35,6 +40,10 @@ services:
 
   web:
     <<: *app
+    # .env sets PORT=4000 for the API; the Next.js server reads PORT too, and the gateway expects 3000.
+    environment:
+      <<: *app-env
+      PORT: '3000'
     build: { context: ., dockerfile: docker/Dockerfile, target: web }
     depends_on: [api]
 

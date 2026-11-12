@@ -1,5 +1,18 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+} from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import type { Response } from 'express';
 import { CurrentUser, Public, Roles, type AuthUser } from '../../common/auth';
 import {
   ApiKeyDto,
@@ -7,6 +20,7 @@ import {
   CreatedApiKeyDto,
   CreateWebhookDto,
   ListMerchantsQuery,
+  ListWebhookAttemptsQuery,
   ListMyMerchantParcelsQuery,
   MerchantDto,
   RegisterMerchantDto,
@@ -26,6 +40,8 @@ export class MerchantsController {
 
   @Post('register')
   @Public()
+  // Public sign-up: stricter than the global limit (same idea as the auth routes).
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: 'Merchant sign-up (account starts PENDING approval)' })
   @ApiOkResponse({ type: MerchantDto })
   register(@Body() dto: RegisterMerchantDto) {
@@ -92,8 +108,18 @@ export class MerchantsController {
   }
 
   @Get('me/webhooks/:id/attempts')
-  attempts(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.merchants.listWebhookAttempts(user, id);
+  @ApiOperation({
+    summary: 'Delivery attempts for an endpoint, newest first (total in X-Total-Count)',
+  })
+  async attempts(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Query() q: ListWebhookAttemptsQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { data, total } = await this.merchants.listWebhookAttempts(user, id, q);
+    res.setHeader('X-Total-Count', String(total));
+    return data;
   }
 
   @Get('me/parcels')

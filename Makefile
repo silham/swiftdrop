@@ -90,9 +90,8 @@ test: ## Unit tests (all packages)
 test-int: ## API integration tests against swiftdrop_test
 	$(EXEC) -e TEST_DATABASE_URL=postgresql://swiftdrop:swiftdrop@postgres:5432/swiftdrop_test api pnpm --filter @swiftdrop/api test:int
 
-coverage: ## Unit + integration coverage reports (apps/api/coverage)
-	$(EXEC) api pnpm --filter @swiftdrop/api test:cov
-	$(EXEC) api pnpm --filter @swiftdrop/api test:int:cov
+coverage: ## Merged unit + integration coverage with a minimum threshold (apps/api/coverage/merged)
+	$(EXEC) -e TEST_DATABASE_URL=postgresql://swiftdrop:swiftdrop@postgres:5432/swiftdrop_test api pnpm --filter @swiftdrop/api test:cov:all
 
 e2e: ## Playwright journeys against the running stack (report: apps/e2e/playwright-report)
 	$(COMPOSE) --profile e2e run --rm e2e

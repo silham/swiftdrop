@@ -77,10 +77,35 @@ docs/           architecture, ADRs, conventions, contracts, member briefs
 - [docs/contracts/](docs/contracts/): parcel lifecycle, authorization matrix, event catalog, endpoint list
 - [docs/members/](docs/members/): one brief per team member
 - [docs/TEAM.md](docs/TEAM.md): who is who
+- [docs/report/](docs/report/): test report, demo script, use cases, activity diagrams, contribution sheet
+- [docs/release-checklist.md](docs/release-checklist.md): what to check before a demo or release
+- [docs/partner-api.md](docs/partner-api.md) and [docs/security-review.md](docs/security-review.md)
 
 ## Known limitations
 
-- The scaffold ships the business endpoints as documented stubs that return `501 NOT_IMPLEMENTED`
-  until their owner implements them.
-- Google OAuth needs real credentials in `.env`.
+- Google sign-in needs real credentials in `.env`; without them the button answers "not configured".
 - SMS is a mock provider that writes a log line. Email goes to Mailpit.
+- The seeded proof of delivery for `SD100000003` has no photo file (object storage isn't part of the
+  seed), so its photo view says "not available". Photos taken through the courier screens work.
+- Kubernetes manifests and the AI delivery assistant (the P2 stretch goals) are not built.
+- The `make e2e` suite needs the dev stack running and takes a few minutes, mostly page compilation.
+- `make prod-up` serves plain HTTP on localhost. Cookies are marked `Secure` there, which Safari
+  refuses over HTTP: run `PROD_COOKIE_SECURE=false make prod-up` for Safari, or put it behind HTTPS.
+
+## Troubleshooting
+
+| Problem                                                         | What to do                                                                                                                                                |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Cannot connect to the Docker daemon`                           | Start Docker Desktop, wait until it says it is running, then `make up`. Data is kept in volumes.                                                          |
+| Port already in use (8080, 5432, 5672, 15672, 8025, 9000, 9001) | Stop whatever uses it (`lsof -i :8080`) or stop the other project. `make down` stops this stack.                                                          |
+| `make up` is very slow or containers restart                    | Give Docker Desktop at least 4 GB RAM (Settings → Resources). The first start builds images and installs packages (3–5 minutes).                          |
+| The page shows an old version or a build error after `git pull` | `make install` (dependencies, shared packages), `make migrate-deploy` (new migrations), then `make restart`.                                              |
+| `make gen` or typecheck fails on `schema.d.ts`                  | The API types are generated: run `make gen` after any API change.                                                                                         |
+| Tests fail with a database error                                | The integration tests use their own `swiftdrop_test` database and reset it on every run. Make sure `make ps` shows postgres healthy and rabbitmq healthy. |
+| Integration tests behave oddly while the stack is running       | They talk to the same RabbitMQ as the dev stack. If an events test fails once, run `make test-int` again; a persistent failure is a real bug.             |
+| `git commit` fails with `pnpm: command not found` (husky hook)  | The editor's git can't see `pnpm`. Start VS Code from a terminal where `pnpm` works (`code .`), or add the folder containing `pnpm` to the hook's PATH.   |
+| Emails don't arrive                                             | Open Mailpit (http://localhost:8025). If it is empty, check the worker: `make logs s=worker`.                                                             |
+| Live tracking never says "Live"                                 | The browser falls back to polling every 15 seconds if the event stream can't connect. Check `make logs s=api` and that RabbitMQ is healthy.               |
+| Signed out right after login in the prod stack                  | Secure cookies over plain HTTP: see "Known limitations" (`PROD_COOKIE_SECURE=false`).                                                                     |
+| Dev login panel missing on `/login`                             | It only shows when `ENABLE_DEV_LOGIN=true` (default in `.env.example`) and never in production mode.                                                      |
+| I need a clean database                                         | Ask the team lead first: `make db-reset` and `make nuke` delete data and are never run by the coding agents.                                              |

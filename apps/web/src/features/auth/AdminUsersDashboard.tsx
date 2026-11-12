@@ -69,27 +69,47 @@ const ROLES_LIST: { label: string; value: Role | 'ALL' }[] = [
   { label: 'Customers', value: 'CUSTOMER' },
 ];
 
+type StatusFilter = 'ALL' | 'ACTIVE' | 'DISABLED';
+
+const STATUS_TABS: { value: StatusFilter; label: string }[] = [
+  { value: 'ALL', label: 'Any status' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'DISABLED', label: 'Disabled' },
+];
+
 export function AdminUsersDashboard({ initialUsers, initialTotal }: AdminUsersDashboardProps) {
   const [users, setUsers] = useState<UserRow[]>(initialUsers);
   // Unfiltered snapshot (first page) that powers the KPI tiles; kept in sync with local edits.
   const [baseline, setBaseline] = useState<UserRow[]>(initialUsers);
   const [roleFilter, setRoleFilter] = useState<Role | 'ALL'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [updatingId, setUpdatingId] = useState<string>();
 
-  async function loadUsers(targetRole = roleFilter, targetSearch = search) {
+  async function loadUsers(
+    targetRole = roleFilter,
+    targetSearch = search,
+    targetStatus = statusFilter,
+  ) {
     setLoading(true);
     setError(undefined);
 
-    const query: { page: number; pageSize: number; role?: Role; search?: string } = {
+    const query: {
+      page: number;
+      pageSize: number;
+      role?: Role;
+      search?: string;
+      isActive?: boolean;
+    } = {
       page: 1,
       pageSize: 100,
     };
     if (targetRole !== 'ALL') query.role = targetRole;
     if (targetSearch.trim()) query.search = targetSearch.trim();
+    if (targetStatus !== 'ALL') query.isActive = targetStatus === 'ACTIVE';
 
     const { data, error: apiErr } = await api.GET('/api/v1/admin/users', {
       params: { query },
@@ -103,7 +123,7 @@ export function AdminUsersDashboard({ initialUsers, initialTotal }: AdminUsersDa
 
     const rows = (data.data as unknown as UserRow[]) ?? [];
     setUsers(rows);
-    if (targetRole === 'ALL' && !targetSearch.trim()) setBaseline(rows);
+    if (targetRole === 'ALL' && !targetSearch.trim() && targetStatus === 'ALL') setBaseline(rows);
   }
 
   async function handleToggleActive(user: UserRow) {
@@ -331,6 +351,16 @@ export function AdminUsersDashboard({ initialUsers, initialTotal }: AdminUsersDa
                   : undefined,
               }))}
             />
+            <Tabs
+              label="Filter by status"
+              value={statusFilter}
+              onChange={(value) => {
+                const next = value as StatusFilter;
+                setStatusFilter(next);
+                loadUsers(roleFilter, search, next);
+              }}
+              items={STATUS_TABS}
+            />
           </Toolbar>
         </div>
 
@@ -353,8 +383,8 @@ export function AdminUsersDashboard({ initialUsers, initialTotal }: AdminUsersDa
                   compact
                   title="No users found"
                   description={
-                    search || roleFilter !== 'ALL'
-                      ? 'Try adjusting your search criteria or role filters.'
+                    search || roleFilter !== 'ALL' || statusFilter !== 'ALL'
+                      ? 'Try adjusting your search criteria or filters.'
                       : 'There are no user accounts registered in the system yet.'
                   }
                   action={
@@ -362,8 +392,9 @@ export function AdminUsersDashboard({ initialUsers, initialTotal }: AdminUsersDa
                       variant="secondary"
                       onClick={() => {
                         setRoleFilter('ALL');
+                        setStatusFilter('ALL');
                         setSearch('');
-                        loadUsers('ALL', '');
+                        loadUsers('ALL', '', 'ALL');
                       }}
                     >
                       Reset Filters

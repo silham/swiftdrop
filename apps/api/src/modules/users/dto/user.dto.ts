@@ -10,6 +10,7 @@ import {
   Matches,
   MinLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { PaginationQuery } from '../../../common/pagination/pagination';
 
 /** Public shape of a user. NEVER include passwordHash or sessions. */
@@ -59,4 +60,10 @@ export class PaginatedUsersDto {
 export class ListUsersQuery extends PaginationQuery {
   @ApiPropertyOptional({ enum: ROLES }) @IsOptional() @IsIn(ROLES) role?: Role;
   @ApiPropertyOptional() @IsOptional() @IsString() search?: string;
+  @ApiPropertyOptional({ description: 'true = active accounts only, false = disabled only' })
+  @IsOptional()
+  // Query strings arrive as text; accept only "true" / "false".
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  isActive?: boolean;
 }

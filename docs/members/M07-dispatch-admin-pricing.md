@@ -146,3 +146,9 @@ The `POST /pricing/estimate` endpoint is public. Admin CRUD lives at `/admin/zon
   Dispatch now rejects assigning a FAILED parcel with no attempts left (`MAX_ATTEMPTS_REACHED`), hides
   it from the unassigned queue, and `unassign` also accepts FAILED parcels so a dispatcher can hand
   one to another courier. See `docs/contracts/parcel-lifecycle.md`.
+- **Follow-ups closed (P1 pass):** zone and pricing-rule changes are written together with their audit
+  entry in one transaction; a rule with `validFrom` later than `validTo` is rejected (400, also when an
+  update changes only one side). New `GET /dispatch/assignments` (ACTIVE, newest first, with
+  `canUnassign`) feeds an "Active assignments" card on `/dispatch` with an Unassign button, covered by
+  integration tests and an e2e test. The seeded demo parcels now have a consistent fee (55000) and
+  courier work (see `packages/db/seed/30-parcels.ts`).

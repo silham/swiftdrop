@@ -8,9 +8,11 @@ import { OutboxService } from '../../infra/events';
 import { PrismaService } from '../../infra/prisma';
 import { AuditService } from '../audit';
 import type {
+  ActiveAssignmentDto,
   AssignmentDto,
   CourierWorkloadDto,
   CreateAssignmentDto,
+  ListAssignmentsQuery,
   ListUnassignedQuery,
   UnassignedParcelDto,
 } from './dto/dispatch.dto';
@@ -96,6 +98,36 @@ export class DispatchService {
       createdAt: p.createdAt,
     }));
 
+    return paginated(data, total, q);
+  }
+
+  /** ACTIVE assignments, newest first, so dispatch can follow up or cancel one. */
+  async listActiveAssignments(q: ListAssignmentsQuery) {
+    const where: Prisma.CourierAssignmentWhereInput = { status: 'ACTIVE' };
+    const [rows, total] = await Promise.all([
+      this.prisma.courierAssignment.findMany({
+        where,
+        orderBy: { assignedAt: 'desc' },
+        skip: q.skip,
+        take: q.take,
+        include: {
+          parcel: { select: { trackingNumber: true, status: true } },
+          courier: { select: { name: true } },
+        },
+      }),
+      this.prisma.courierAssignment.count({ where }),
+    ]);
+
+    const data: ActiveAssignmentDto[] = rows.map((a) => ({
+      id: a.id,
+      parcelId: a.parcelId,
+      trackingNumber: a.parcel.trackingNumber,
+      parcelStatus: a.parcel.status,
+      courierId: a.courierId,
+      courierName: a.courier.name,
+      assignedAt: a.assignedAt,
+      canUnassign: UNASSIGNABLE_STATUSES.includes(a.parcel.status),
+    }));
     return paginated(data, total, q);
   }
 

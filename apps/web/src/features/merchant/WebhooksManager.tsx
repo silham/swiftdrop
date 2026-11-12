@@ -47,6 +47,8 @@ interface WebhookAttemptItem {
   createdAt: string;
 }
 
+const ATTEMPTS_PAGE_SIZE = 20;
+
 /** Owner: M5. Webhook endpoints, signing-secret rotation and delivery attempts. */
 export function WebhooksManager() {
   const [endpoints, setEndpoints] = useState<WebhookItem[]>([]);
@@ -68,6 +70,8 @@ export function WebhooksManager() {
   // Delivery attempts view
   const [selectedEndpoint, setSelectedEndpoint] = useState<WebhookItem | null>(null);
   const [attempts, setAttempts] = useState<WebhookAttemptItem[]>([]);
+  const [attemptsTotal, setAttemptsTotal] = useState(0);
+  const [attemptsPage, setAttemptsPage] = useState(1);
   const [loadingAttempts, setLoadingAttempts] = useState(false);
 
   async function loadEndpoints() {
@@ -201,19 +205,30 @@ export function WebhooksManager() {
     }
   }
 
-  async function handleViewAttempts(endpoint: WebhookItem) {
-    setSelectedEndpoint(endpoint);
+  /** Loads one page of attempts. Page 1 replaces the list, later pages are appended. */
+  async function loadAttempts(endpoint: WebhookItem, page: number) {
     try {
       setLoadingAttempts(true);
-      const res = await fetch(`/api/v1/merchants/me/webhooks/${endpoint.id}/attempts`);
+      const res = await fetch(
+        `/api/v1/merchants/me/webhooks/${endpoint.id}/attempts?page=${page}&pageSize=${ATTEMPTS_PAGE_SIZE}`,
+      );
       if (!res.ok) throw await res.json();
-      const data = await res.json();
-      setAttempts(data);
+      const data: WebhookAttemptItem[] = await res.json();
+      setAttemptsTotal(Number(res.headers.get('X-Total-Count') ?? data.length));
+      setAttemptsPage(page);
+      setAttempts((prev) => (page === 1 ? data : [...prev, ...data]));
     } catch (err) {
       setError(errorMessage(err, 'Failed to fetch delivery attempts'));
     } finally {
       setLoadingAttempts(false);
     }
+  }
+
+  async function handleViewAttempts(endpoint: WebhookItem) {
+    setSelectedEndpoint(endpoint);
+    setAttempts([]);
+    setAttemptsTotal(0);
+    await loadAttempts(endpoint, 1);
   }
 
   const columns: Column<WebhookItem>[] = [
@@ -424,7 +439,7 @@ export function WebhooksManager() {
           </Button>
         }
       >
-        {loadingAttempts ? (
+        {loadingAttempts && attempts.length === 0 ? (
           <div className="space-y-3" role="status" aria-label="Loading delivery history...">
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-9 w-full" />
@@ -437,7 +452,24 @@ export function WebhooksManager() {
             description="No delivery attempts recorded for this endpoint yet."
           />
         ) : (
-          <Table dense columns={attemptColumns} rows={attempts} rowKey={(a) => a.id} />
+          <div className="space-y-3">
+            <Table dense columns={attemptColumns} rows={attempts} rowKey={(a) => a.id} />
+            <div className="flex items-center justify-between text-xs text-muted">
+              <span>
+                Showing {attempts.length} of {attemptsTotal}
+              </span>
+              {attempts.length < attemptsTotal && selectedEndpoint && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={loadingAttempts}
+                  onClick={() => void loadAttempts(selectedEndpoint, attemptsPage + 1)}
+                >
+                  {loadingAttempts ? 'Loading…' : 'Load more'}
+                </Button>
+              )}
+            </div>
+          </div>
         )}
       </Drawer>
     </div>

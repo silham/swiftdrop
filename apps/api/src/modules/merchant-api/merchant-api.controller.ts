@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { Public } from '../../common/auth';
 import { PaginationQuery } from '../../common/pagination/pagination';
@@ -25,6 +26,8 @@ import { MerchantApiService } from './merchant-api.service';
 @Controller('merchant')
 @Public()
 @UseGuards(ApiKeyGuard)
+// Machine-to-machine traffic gets more room than the browser default, but not unlimited.
+@Throttle({ default: { limit: 120, ttl: 60_000 } })
 export class MerchantApiController {
   constructor(private readonly api: MerchantApiService) {}
 

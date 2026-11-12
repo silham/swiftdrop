@@ -2,6 +2,9 @@ import type { APIRequestContext, PlaywrightWorkerArgs } from '@playwright/test';
 import { expect } from '@playwright/test';
 import { ACCOUNTS, authFile, type Role } from './auth';
 
+/** Recipient name on every parcel the suite books; cleanup (support/cleanup.ts) relies on it. */
+export const E2E_RECIPIENT = 'E2E Recipient';
+
 /** A 1×1 PNG: enough for the API's magic-byte check. */
 export const PNG_1X1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -32,7 +35,7 @@ export async function bookParcel(customer: APIRequestContext): Promise<BookedPar
       senderPhone: '+94771234567',
       pickupAddress: '12 Galle Road',
       pickupCity: 'colombo',
-      recipientName: 'E2E Recipient',
+      recipientName: E2E_RECIPIENT,
       recipientPhone: '+94777654321',
       recipientEmail,
       dropoffAddress: '5 Temple Street',

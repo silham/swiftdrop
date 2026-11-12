@@ -3,9 +3,11 @@ import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestj
 import { CurrentUser, Roles, type AuthUser } from '../../common/auth';
 import { DispatchService } from './dispatch.service';
 import {
+  ActiveAssignmentPageDto,
   AssignmentDto,
   CourierWorkloadDto,
   CreateAssignmentDto,
+  ListAssignmentsQuery,
   ListUnassignedQuery,
   UnassignedParcelPageDto,
 } from './dto/dispatch.dto';
@@ -22,6 +24,13 @@ export class DispatchController {
   @ApiOkResponse({ type: UnassignedParcelPageDto })
   unassigned(@Query() q: ListUnassignedQuery) {
     return this.dispatch.listUnassigned(q);
+  }
+
+  @Get('assignments')
+  @ApiOperation({ summary: 'List active courier assignments (newest first)' })
+  @ApiOkResponse({ type: ActiveAssignmentPageDto })
+  assignments(@Query() q: ListAssignmentsQuery) {
+    return this.dispatch.listActiveAssignments(q);
   }
 
   @Post('assignments')

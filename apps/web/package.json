@@ -9,7 +9,7 @@
     "build": "pnpm gen:api && next build",
     "start": "next start --port 3000",
     "typecheck": "pnpm gen:api && tsc --noEmit",
-    "test": "echo \"web: no unit tests yet (add *.test.tsx with vitest or rely on Playwright in apps/e2e)\""
+    "test": "tsx --tsconfig tsconfig.json --test \"src/**/*.test.ts\" \"src/**/*.test.tsx\""
   },
   "dependencies": {
     "@swiftdrop/contracts": "workspace:*",
@@ -29,6 +29,7 @@
     "eslint-config-next": "16.4.2",
     "openapi-typescript": "7.13.0",
     "tailwindcss": "4.3.3",
+    "tsx": "4.23.15",
     "typescript": "6.0.3"
   }
 }

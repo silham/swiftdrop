@@ -54,15 +54,18 @@ jobs:
       - run: pnpm typecheck
       - name: Prisma drift check (schema files == migrations)
         run: pnpm --filter @swiftdrop/db migrate:diff
-      - run: pnpm test:cov
-      - run: pnpm --filter @swiftdrop/api test:int:cov
+      # Worker + contracts unit tests with coverage, and the web unit tests.
+      - run: pnpm --filter @swiftdrop/worker --filter @swiftdrop/contracts test:cov
+      - run: pnpm --filter @swiftdrop/web test
+      # API unit + integration tests in one run: one merged report, minimum coverage enforced.
+      - run: pnpm --filter @swiftdrop/api test:cov:all
       - run: pnpm build
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage
           path: |
-            apps/api/coverage
+            apps/api/coverage/merged
             apps/worker/coverage
             packages/contracts/coverage
 

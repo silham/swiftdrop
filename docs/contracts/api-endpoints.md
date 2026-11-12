@@ -18,7 +18,7 @@ owner as they implement it.
 | POST /pricing/estimate                                                                                                                               | public                               | M7    | ✅ done |
 | GET/POST /admin/zones · PATCH /admin/zones/:id                                                                                                       | ADMIN, DISPATCHER                    | M7    | ✅ done |
 | GET/POST /admin/pricing-rules · PATCH /admin/pricing-rules/:id                                                                                       | ADMIN, DISPATCHER                    | M7    | ✅ done |
-| GET /dispatch/unassigned · POST /dispatch/assignments · DELETE /dispatch/assignments/:id · GET /dispatch/couriers/workload                           | DISPATCHER, ADMIN                    | M7    | ✅ done |
+| GET /dispatch/unassigned · GET/POST /dispatch/assignments · DELETE /dispatch/assignments/:id · GET /dispatch/couriers/workload                       | DISPATCHER, ADMIN                    | M7    | ✅ done |
 | GET /courier/parcels · GET /courier/parcels/:id · PATCH /courier/parcels/:id/status · POST /courier/parcels/:id/proof · GET /courier/history         | COURIER                              | M6    | ✅ done |
 | GET /parcels/:id/proof/photo                                                                                                                         | COURIER, CUSTOMER, DISPATCHER, ADMIN | M6    | ✅ done |
 | POST /merchants/register                                                                                                                             | public                               | M5    | ✅ done |

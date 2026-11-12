@@ -5,6 +5,17 @@ import * as crypto from 'node:crypto';
 import type { Env } from '../../config/env';
 import { AuthService } from './auth.service';
 
+// Google's client is replaced so no network call is made; each test sets what it returns.
+const mockGetToken = jest.fn();
+const mockVerifyIdToken = jest.fn();
+jest.mock('google-auth-library', () => ({
+  OAuth2Client: jest.fn().mockImplementation(() => ({
+    getToken: mockGetToken,
+    verifyIdToken: mockVerifyIdToken,
+    generateAuthUrl: jest.fn().mockReturnValue('https://accounts.google.test/auth'),
+  })),
+}));
+
 describe('AuthService (unit)', () => {
   let authService: AuthService;
   let mockPrisma: any;
@@ -216,6 +227,146 @@ describe('AuthService (unit)', () => {
     it('is a no-op if refreshToken is undefined', async () => {
       await authService.logout(undefined);
       expect(mockPrisma.refreshSession.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Google OAuth sign-in (profile → user)', () => {
+    const callback = () =>
+      authService.googleCallback('auth-code', 'state-1', 'state-1', 'verifier', {
+        ip: '127.0.0.1',
+      });
+
+    /** What Google's verified ID token says about the person signing in. */
+    function googleSays(payload: Record<string, unknown> | undefined) {
+      mockGetToken.mockResolvedValue({ tokens: { id_token: 'id-token' } });
+      mockVerifyIdToken.mockResolvedValue({ getPayload: () => payload });
+    }
+
+    beforeEach(() => {
+      mockGetToken.mockReset();
+      mockVerifyIdToken.mockReset();
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+      mockUsers.findByEmail.mockResolvedValue(null);
+    });
+
+    it('creates a CUSTOMER with no password and links the Google account for a new person', async () => {
+      googleSays({
+        sub: 'g-123',
+        email: '  New.Person@Example.COM ',
+        email_verified: true,
+        name: 'New Person',
+      });
+      const created = {
+        ...fakeUser,
+        id: 'new-user',
+        email: 'new.person@example.com',
+        name: 'New Person',
+        passwordHash: null,
+      };
+      mockPrisma.user.create.mockResolvedValue(created);
+
+      const session = await callback();
+
+      expect(mockPrisma.user.create).toHaveBeenCalledWith({
+        data: {
+          email: 'new.person@example.com', // trimmed and lower-cased
+          name: 'New Person',
+          role: 'CUSTOMER', // Google sign-in can never create staff
+          passwordHash: null,
+        },
+      });
+      expect(mockPrisma.oAuthAccount.create).toHaveBeenCalledWith({
+        data: { userId: 'new-user', provider: 'google', providerAccountId: 'g-123' },
+      });
+      expect(session.user).toMatchObject({ id: 'new-user', role: 'CUSTOMER' });
+      expect(session.home).toBe('/customer');
+      expect(session.accessToken).toBe('fake.jwt.token');
+      expect(mockPrisma.refreshSession.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to the email name when Google sends no display name', async () => {
+      googleSays({ sub: 'g-9', email: 'quiet@example.com', email_verified: true });
+      mockPrisma.user.create.mockResolvedValue({ ...fakeUser, id: 'q', passwordHash: null });
+      await callback();
+      expect(mockPrisma.user.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ name: 'quiet' }),
+      });
+    });
+
+    it('links Google to an existing account with the same verified email, keeping its role', async () => {
+      googleSays({ sub: 'g-456', email: fakeUser.email, email_verified: true, name: 'Test' });
+      mockUsers.findByEmail.mockResolvedValue({ ...fakeUser, role: 'DISPATCHER' });
+
+      const session = await callback();
+
+      expect(mockPrisma.user.create).not.toHaveBeenCalled();
+      expect(mockPrisma.oAuthAccount.create).toHaveBeenCalledWith({
+        data: { userId: fakeUser.id, provider: 'google', providerAccountId: 'g-456' },
+      });
+      expect(session.user.role).toBe('DISPATCHER');
+      expect(session.home).toBe('/dispatch');
+    });
+
+    it('signs in through an existing Google link without creating or linking anything', async () => {
+      googleSays({ sub: 'g-789', email: fakeUser.email, email_verified: true });
+      mockPrisma.user.findFirst.mockResolvedValue(fakeUser);
+
+      const session = await callback();
+
+      expect(mockUsers.findByEmail).not.toHaveBeenCalled();
+      expect(mockPrisma.user.create).not.toHaveBeenCalled();
+      expect(mockPrisma.oAuthAccount.create).not.toHaveBeenCalled();
+      expect(session.user.id).toBe(fakeUser.id);
+    });
+
+    it('refuses an unverified Google email, so nobody can claim an account by typing its address', async () => {
+      googleSays({ sub: 'g-1', email: fakeUser.email, email_verified: false });
+      await expect(callback()).rejects.toMatchObject({
+        code: ERROR_CODES.UNAUTHENTICATED,
+        message: expect.stringContaining('not verified'),
+      });
+      expect(mockUsers.findByEmail).not.toHaveBeenCalled();
+      expect(mockPrisma.oAuthAccount.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a profile without an email', async () => {
+      googleSays({ sub: 'g-1', email_verified: true });
+      await expect(callback()).rejects.toMatchObject({ code: ERROR_CODES.UNAUTHENTICATED });
+    });
+
+    it('refuses a disabled account and does not link Google to it', async () => {
+      googleSays({ sub: 'g-2', email: fakeUser.email, email_verified: true });
+      mockUsers.findByEmail.mockResolvedValue({ ...fakeUser, isActive: false });
+      await expect(callback()).rejects.toMatchObject({
+        code: ERROR_CODES.ACCOUNT_DISABLED,
+        status: HttpStatus.FORBIDDEN,
+      });
+      expect(mockPrisma.oAuthAccount.create).not.toHaveBeenCalled();
+      expect(mockPrisma.refreshSession.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a disabled account that is already linked', async () => {
+      googleSays({ sub: 'g-3', email: fakeUser.email, email_verified: true });
+      mockPrisma.user.findFirst.mockResolvedValue({ ...fakeUser, isActive: false });
+      await expect(callback()).rejects.toMatchObject({ code: ERROR_CODES.ACCOUNT_DISABLED });
+    });
+
+    it('turns a Google failure (bad or expired code) into a 401, not a 500', async () => {
+      mockGetToken.mockRejectedValue(new Error('invalid_grant'));
+      await expect(callback()).rejects.toMatchObject({
+        code: ERROR_CODES.UNAUTHENTICATED,
+        status: HttpStatus.UNAUTHORIZED,
+        message: 'Google sign-in failed',
+      });
+    });
+
+    it('fails when Google returns no ID token or the token does not verify', async () => {
+      mockGetToken.mockResolvedValue({ tokens: {} });
+      await expect(callback()).rejects.toMatchObject({ message: 'Google sign-in failed' });
+
+      mockGetToken.mockResolvedValue({ tokens: { id_token: 'forged' } });
+      mockVerifyIdToken.mockRejectedValue(new Error('Wrong recipient'));
+      await expect(callback()).rejects.toMatchObject({ message: 'Google sign-in failed' });
     });
   });
 

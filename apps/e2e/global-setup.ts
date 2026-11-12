@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { request, type FullConfig } from '@playwright/test';
 import { ACCOUNTS, PASSWORD, authFile, type Role } from './support/auth';
+import { finishLeftoverE2eParcels } from './support/cleanup';
 
 /**
  * Logs in every demo role once through the real login API and saves the cookies. Specs then start
@@ -20,6 +21,11 @@ export default async function globalSetup(config: FullConfig) {
       if (!res.ok()) throw new Error(`E2E login failed for ${role}: HTTP ${res.status()}`);
       mkdirSync(dirname(authFile(role)), { recursive: true });
       await api.storageState({ path: authFile(role) });
+      if (role === 'courier1') {
+        const finished = await finishLeftoverE2eParcels(api);
+        if (finished)
+          console.warn(`e2e setup: finished ${finished} parcel(s) left by earlier runs`);
+      }
     } finally {
       await api.dispose();
     }

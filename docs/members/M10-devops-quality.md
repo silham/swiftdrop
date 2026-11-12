@@ -92,3 +92,23 @@ testing. You are **not** the only tester; every owner tests their own code.
 
 - If a dev volume gets corrupted, `make nuke` asks for confirmation before wiping everything.
 - The first `make e2e` downloads the Playwright image (~2 GB).
+- **Delivered (P0/P1 pass):**
+  - **E2E:** `apps/e2e` logs in each role once (`global-setup.ts`, saved sessions in `.auth/`, so the
+    suite stays under the auth rate limit and works with dev login off), with helpers in `support/`.
+    Specs: customer booking, the full book → assign → deliver → notify journey (including the Mailpit
+    check), courier on a phone (`@mobile`), live tracking, merchant API, dispatcher unassign, plus the
+    earlier smoke, ui-shell and event-ops specs. Timeouts are generous because the dev stack compiles
+    pages on first visit.
+  - **Coverage:** `make coverage` runs API unit + integration tests in one Jest run
+    (`apps/api/jest.all.config.js`), writes one merged report and enforces minimum coverage. CI uses it.
+  - **Web unit tests** now run in `make test` and in CI (`tsx` as a devDependency of `apps/web`).
+  - **Prod compose** sets `COOKIE_SECURE=true` (override with `PROD_COOKIE_SECURE=false`).
+  - **Production images fixed and verified** (`make prod-up`, see `docs/report/test-report.md` §5):
+    API and worker built to `dist/src/` so they crashed on start (fixed with `stripLeadingPaths` in
+    both `nest-cli.json`), and the web server listened on the API's port 4000 from `.env` so every
+    page was a 502 (fixed with `PORT: '3000'` for the web service). The prod `migrate` step doesn't
+    seed; seed once by hand for a demo.
+  - **Docs:** README troubleshooting, `docs/release-checklist.md`, `docs/report/` (test report, demo
+    script, use cases, activity diagrams, contribution sheet).
+- **Still needs a repository admin:** branch protection on `main` (required PR, required checks, code
+  owner review) and the real GitHub handles in `.github/CODEOWNERS`.

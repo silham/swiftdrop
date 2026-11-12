@@ -85,6 +85,8 @@ export class UsersService {
     if (q.role) {
       where.role = q.role;
     }
+    if (q.isActive !== undefined) where.isActive = q.isActive;
+
     if (q.search) {
       const s = q.search.trim();
       where.OR = [

@@ -6,4 +6,6 @@ export {
   CourierWorkloadDto,
   AssignmentDto,
   UnassignedParcelDto,
+  ActiveAssignmentDto,
+  ListAssignmentsQuery,
 } from './dto/dispatch.dto';

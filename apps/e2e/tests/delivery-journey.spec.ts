@@ -27,6 +27,7 @@ test.describe('book → assign → deliver → notify', () => {
 
     await openRowOnAnyPage(page, parcel.trackingNumber);
     await page
+      .getByRole('table', { name: 'Assignment queue' })
       .getByRole('row', { name: new RegExp(parcel.trackingNumber) })
       .getByRole('button', { name: 'Assign Courier' })
       .click();
@@ -91,11 +92,16 @@ test.describe('book → assign → deliver → notify', () => {
   });
 });
 
-/** The queue is paginated, oldest first. Walk the pages until the parcel's row shows up. */
+/**
+ * The queue is paginated, oldest first. Walk its pages until the parcel's row shows up. Everything is
+ * scoped to the queue: the "Active assignments" card below has its own table and paginator.
+ */
 async function openRowOnAnyPage(page: Page, trackingNumber: string) {
-  const row = page.getByRole('row', { name: new RegExp(trackingNumber) });
-  const pageLabel = page.getByText(/^Page \d+ of \d+$/);
-  const next = page.getByRole('button', { name: 'Next page' });
+  const queue = page.getByRole('table', { name: 'Assignment queue' });
+  const row = queue.getByRole('row', { name: new RegExp(trackingNumber) });
+  // The queue card comes first in the page, so its paginator is the first one.
+  const pageLabel = page.getByText(/^Page \d+ of \d+$/).first();
+  const next = page.getByRole('button', { name: 'Next page' }).first();
   for (let i = 0; i < 20; i++) {
     // Rows load after the page changes, so give each page a moment before moving on.
     const found = await row

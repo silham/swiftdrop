@@ -26,6 +26,7 @@ import { api } from '@/lib/api/client';
 import { errorMessage } from '@/lib/api/errors';
 import { formatMoney, formatRelative } from '@/lib/format';
 import type { ParcelSize, ParcelStatus } from '@swiftdrop/contracts';
+import { ActiveAssignments } from './ActiveAssignments';
 import { AssignCourierModal, type AssignableParcel } from './AssignCourierModal';
 import { hasCapacity, summariseFleet, useCourierWorkload, utilisationPct } from './workload';
 
@@ -62,6 +63,8 @@ export function UnassignedQueue() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [assignTarget, setAssignTarget] = useState<AssignableParcel | null>(null);
+  // Bumped whenever an assignment is made or cancelled, so the assignments card reloads.
+  const [assignmentsKey, setAssignmentsKey] = useState(0);
   const workload = useCourierWorkload();
   const fleet = summariseFleet(workload.couriers);
 
@@ -125,6 +128,7 @@ export function UnassignedQueue() {
   function refreshAll() {
     void loadParcels();
     workload.reload();
+    setAssignmentsKey((k) => k + 1);
   }
 
   const columns: Column<UnassignedParcelRow>[] = [
@@ -291,6 +295,7 @@ export function UnassignedQueue() {
               columns={columns}
               rows={parcels}
               rowKey={(p) => p.id}
+              caption="Assignment queue"
               empty={
                 <div className="p-5">
                   <EmptyState
@@ -384,6 +389,8 @@ export function UnassignedQueue() {
           </CardFooter>
         </Card>
       </div>
+
+      <ActiveAssignments refreshKey={assignmentsKey} onChanged={refreshAll} />
 
       {assignTarget && (
         <AssignCourierModal

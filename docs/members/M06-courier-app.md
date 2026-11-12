@@ -103,7 +103,7 @@ Implemented (all six endpoints, web pages, tests):
   links, status buttons, a Failed dialog (`FAILURE_REASONS`) and a Deliver dialog with a camera
   input. Uploads use `fetch` with one silent-refresh retry.
 - **Tests**: unit (`file-type`, `courier-actions`, `courier.service`), integration
-  (`apps/api/test/courier/`, 24 cases incl. cross-courier 404s, role checks, upload validation,
+  (`apps/api/test/courier/`, 25 cases incl. cross-courier 404s, role checks, upload validation,
   re-attempt flow, photo access matrix), web unit (`features/courier/actions.test.ts`), e2e
   (`courier-deliver.spec.ts` with `@mobile`, plus the full `delivery-journey.spec.ts`).
 

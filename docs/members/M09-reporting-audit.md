@@ -146,16 +146,18 @@ recorded.
 
 The published action vocabulary is:
 
-`user.created`, `user.role_changed`, `user.deactivated`, `user.status_changed`, `user.updated`,
+`user.created`, `user.role_changed`, `user.status_changed`, `user.updated`,
 `merchant.approved`, `merchant.rejected`, `merchant.suspended`, `api_key.created`,
-`api_key.revoked`, `webhook.secret_rotated`, `zone.created`, `zone.updated`,
-`pricing_rule.created`, `pricing_rule.updated`, `parcel.assigned`, `parcel.unassigned`,
-`webhook_attempt.retried`.
+`api_key.revoked`, `webhook.created`, `webhook.updated`, `webhook.deleted`,
+`webhook_secret.rotated`, `zone.created`, `zone.updated`, `pricing_rule.created`,
+`pricing_rule.updated`, `parcel.assigned`, `parcel.unassigned`, `webhook_attempt.retried`.
 
-Currently verified integrations include User Management role/status/create events and Event Ops
-webhook retry events. Merchant, Zone/Pricing, Dispatch, Courier, and other parcel-operation audit
-events remain dependent on their owners' implementations. Parcel status changes remain in
+All of these are recorded by their owning modules through `AuditService.record`, in the same
+transaction as the change they describe, so a database change can never be committed without its
+audit entry (or the other way round). The one exception is `webhook_attempt.retried`: re-sending a
+webhook publishes to RabbitMQ rather than changing a row, so it is audited right after the publish. Parcel status changes remain in
 `ParcelStatusHistory` and are consumed by Reports rather than duplicated as audit records.
+(`user.deactivated` from the first draft was never used: deactivation is `user.status_changed`.)
 
 ## Authorization
 

@@ -98,6 +98,15 @@ export class ListMyMerchantParcelsQuery extends PaginationQuery {
   status?: ParcelStatus;
 }
 
+/**
+ * GET /merchants/me/webhooks/:id/attempts. The response stays a plain array (additive API change):
+ * `page`/`pageSize` are optional (50 per page by default, as before) and the full count is sent
+ * in the `X-Total-Count` header.
+ */
+export class ListWebhookAttemptsQuery extends PaginationQuery {
+  override pageSize: number = 50;
+}
+
 export class RejectMerchantDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) reason?: string;
 }
