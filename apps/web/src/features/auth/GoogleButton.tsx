@@ -10,7 +10,16 @@ const GOOGLE_START = '/api/v1/auth/google';
  * It checks the OAuth start endpoint first, so an environment without Google credentials (501)
  * shows a friendly message instead of a raw JSON error page.
  */
-export function GoogleButton({ label = 'Continue with Google' }: { label?: string }) {
+export function GoogleButton({
+  label = 'Continue with Google',
+  next,
+}: {
+  label?: string;
+  /** Same-site path to return to after sign-in (the API checks it again). */
+  next?: string | null;
+}) {
+  const startUrl = next ? `${GOOGLE_START}?next=${encodeURIComponent(next)}` : GOOGLE_START;
+
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -29,8 +38,7 @@ export function GoogleButton({ label = 'Continue with Google' }: { label?: strin
       // Network hiccup: fall through and let the full-page navigation report it.
     }
     // A full-page navigation is required: this is an API redirect, not a Next.js route.
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.assign(GOOGLE_START);
+    window.location.assign(startUrl);
   }
 
   return (

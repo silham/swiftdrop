@@ -45,7 +45,7 @@ export function LoginForm() {
         {pending ? 'Signing in…' : 'Sign in'}
       </Button>
 
-      <GoogleButton label="Sign in with Google" />
+      <GoogleButton label="Sign in with Google" next={next} />
     </form>
   );
 }

@@ -81,8 +81,8 @@ export class AuthController {
   }
 
   @Get('google')
-  @ApiOperation({ summary: 'Redirect to Google sign-in' })
-  async google(@Res() res: Response) {
+  @ApiOperation({ summary: 'Redirect to Google sign-in (optional same-site `next` path)' })
+  async google(@Query('next') next: string | undefined, @Res() res: Response) {
     const { url, state, codeVerifier } = await this.auth.googleAuthUrl();
     const cookieOpts = {
       httpOnly: true,
@@ -93,6 +93,9 @@ export class AuthController {
     };
     res.cookie('sd_oauth_state', state, cookieOpts);
     res.cookie('sd_oauth_verifier', codeVerifier, cookieOpts);
+    // Where to land after sign-in (e.g. back on the MCP consent page). Checked again on the way out.
+    const target = safeNextPath(next);
+    if (target) res.cookie(GOOGLE_NEXT_COOKIE, target, cookieOpts);
     res.redirect(url);
   }
 
@@ -113,8 +116,10 @@ export class AuthController {
     );
     res.clearCookie('sd_oauth_state', { path: '/api/v1/auth/google' });
     res.clearCookie('sd_oauth_verifier', { path: '/api/v1/auth/google' });
+    const target = safeNextPath(req.cookies?.[GOOGLE_NEXT_COOKIE]);
+    res.clearCookie(GOOGLE_NEXT_COOKIE, { path: '/api/v1/auth/google' });
     this.startSession(res, session);
-    res.redirect(session.home);
+    res.redirect(target ?? session.home);
   }
 
   private startSession(res: Response, s: IssuedSession): AuthResponseDto {
@@ -124,6 +129,8 @@ export class AuthController {
   }
 }
 
+const GOOGLE_NEXT_COOKIE = 'sd_oauth_next';
+
 const meta = (req: Request) => ({ userAgent: req.headers['user-agent'], ip: req.ip });
 
 /**
@@ -131,7 +138,8 @@ const meta = (req: Request) => ({ userAgent: req.headers['user-agent'], ip: req.
  * "/\\evil.com", "https://…" and API paths no (open-redirect and loop protection).
  */
 export function safeNextPath(next: unknown): string | null {
-  if (typeof next !== 'string' || next.length > 512) return null;
+  // 2048: an OAuth consent URL (/oauth/authorize?client_id…&code_challenge…&state…) is long.
+  if (typeof next !== 'string' || next.length > 2048) return null;
   if (!next.startsWith('/') || next.startsWith('//')) return null;
   // Backslashes and control characters can be read as "//" by browsers.
   if ([...next].some((ch) => ch === '\\' || ch.charCodeAt(0) < 0x20)) return null;
