@@ -1,0 +1,53 @@
+{{- $name := include "swiftdrop.host" (list . "storage") }}
+# S3-compatible object storage (RustFS) for proof-of-delivery photos. Private; the API streams files.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels: {{- include "swiftdrop.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  serviceName: {{ $name }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "swiftdrop.selector" (list . "storage") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "swiftdrop.selector" (list . "storage") | nindent 8 }}
+    spec:
+      containers:
+        - name: storage
+          image: {{ .Values.storage.image }}
+          env:
+            - { name: RUSTFS_ACCESS_KEY, value: {{ .Values.storage.accessKey | quote }} }
+            - name: RUSTFS_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: {{ include "swiftdrop.secretName" . }}, key: S3_SECRET_KEY } }
+          ports:
+            - { name: s3, containerPort: 9000 }
+          readinessProbe:
+            tcpSocket: { port: s3 }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.storage.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests: { storage: {{ .Values.storage.size }} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "swiftdrop.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "swiftdrop.selector" (list . "storage") | nindent 4 }}
+  ports:
+    - { name: s3, port: 9000, targetPort: s3 }

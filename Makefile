@@ -105,4 +105,21 @@ prod-up: ## Build + run production images (compose.prod.yaml)
 prod-down:
 	$(COMPOSE) -f compose.prod.yaml down
 
-.PHONY: help setup up down restart ps logs sh install nuke migrate migrate-deploy db-check seed db-reset studio psql gen lint format typecheck test test-int coverage e2e check prod-up prod-down
+# ── Kubernetes (Helm chart in deploy/helm/swiftdrop, see docs/deploy/kubernetes.md) ──
+CHART := deploy/helm/swiftdrop
+K8S_NS ?= swiftdrop
+
+k8s-images: ## Build the api/worker/web/migrate images for a local cluster (swiftdrop/<x>:local)
+	for t in api worker web migrate; do docker build -f docker/Dockerfile --target $$t -t swiftdrop/$$t:local . || exit 1; done
+
+k8s-lint: ## helm lint + render the chart and validate every manifest (kubeconform)
+	helm lint $(CHART)
+	helm template swiftdrop $(CHART) --namespace $(K8S_NS) | docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0 -strict -summary -kubernetes-version 1.34.0 -
+
+k8s-up: ## Install/upgrade the chart into namespace $(K8S_NS) (needs a cluster + ingress controller)
+	helm upgrade --install swiftdrop $(CHART) --namespace $(K8S_NS) --create-namespace $(HELM_ARGS)
+
+k8s-down: ## Uninstall the chart (volumes/PVCs are kept)
+	helm uninstall swiftdrop --namespace $(K8S_NS)
+
+.PHONY: help setup up down restart ps logs sh install nuke migrate migrate-deploy db-check seed db-reset studio psql gen lint format typecheck test test-int coverage e2e check prod-up prod-down k8s-images k8s-lint k8s-up k8s-down

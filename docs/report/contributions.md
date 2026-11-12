@@ -19,20 +19,23 @@ and lock files included, so treat it as a rough size, not a score).
 | M6     | _(no merged PR)_             | n/a                                                                             | See "Work done on branch `m01/p0-gaps`" below                                                                                                                                            | n/a         |
 | M10    | _(no merged PR)_             | n/a                                                                             | Scaffold CI and Docker by M1; see below for the e2e suite, coverage and prod compose                                                                                                     | n/a         |
 
-## Work done on branch `m01/p0-gaps` (not yet merged)
+## Work done on branch `m01/p0-gaps` (merged through the final pull request)
 
 Done by M1 with an AI coding agent, to close the gaps found when the plan was compared with the
 code. Listed per area so the owners can review their parts:
 
-| Area         | Change                                                                                                                                                                                                                        |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M6 courier   | The whole courier module: assigned list, status updates, proof of delivery with file checks and cleanup, photo viewing rules, history, three mobile pages, 25 integration and 28 unit tests                                   |
-| M7 dispatch  | Failed-parcel rules (no reassigning after three attempts; unassign allowed for failed parcels), list of active assignments with an Unassign button, audit entries in the same transaction, date-window check on pricing rules |
-| M2 auth      | Silent session refresh: `/auth/resume` for page loads and a retry in the client API; admin users status filter; Google sign-in and password policy unit tests                                                                 |
-| M3 customer  | Live status on the parcel page; un-mocked booking integration test                                                                                                                                                            |
-| M4 parcels   | SSE end-to-end integration test through RabbitMQ; seed data for the demo parcels                                                                                                                                              |
-| M5 merchants | Audit for webhook endpoint changes, paged delivery attempts, rate limits, partner API create test                                                                                                                             |
-| M10 quality  | Playwright suite (login once per role, helpers, 6 new journey specs), web unit tests run in CI, merged coverage with a threshold, secure cookies in the prod compose, README and docs                                         |
+| Area          | Change                                                                                                                                                                                                                                  |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M6 courier    | The whole courier module: assigned list, status updates, proof of delivery with file checks and cleanup, photo viewing rules, history, three mobile pages, 25 integration and 28 unit tests                                             |
+| M7 dispatch   | Failed-parcel rules (no reassigning after three attempts; unassign allowed for failed parcels), list of active assignments with an Unassign button, audit entries in the same transaction, date-window check on pricing rules           |
+| M2 auth       | Silent session refresh: `/auth/resume` for page loads and a retry in the client API; admin users status filter; Google sign-in and password policy unit tests                                                                           |
+| M3 customer   | Live status on the parcel page; un-mocked booking integration test                                                                                                                                                                      |
+| M4 parcels    | SSE end-to-end integration test through RabbitMQ; seed data for the demo parcels                                                                                                                                                        |
+| M5 merchants  | Audit for webhook endpoint changes, paged delivery attempts, rate limits, partner API create test                                                                                                                                       |
+| M10 quality   | Playwright suite (login once per role, helpers, 6 new journey specs), web unit tests run in CI, merged coverage with a threshold, secure cookies in the prod compose, README and docs                                                   |
+| M1 bonus: AI  | Shared role-aware tool registry; tracking page chatbot over any OpenAI-compatible model; MCP server for Claude and ChatGPT with SwiftDrop as its own OAuth 2.1 authorization server (DCR, PKCE, consent page, token rotation); ADR-0009 |
+| M1 bonus: K8s | Helm chart (ConfigMap, Secret, Services, Ingress, StatefulSets, seed Job), `make k8s-*` targets, Coolify hosting guide and an env-driven prod compose                                                                                   |
+| M2 auth       | Google sign-in sequence diagram; `next` kept through Google sign-in                                                                                                                                                                     |
 
 ## Team process
 

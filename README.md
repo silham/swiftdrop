@@ -58,13 +58,14 @@ make down            # stop (data is kept)
 ## Repository layout
 
 ```
-apps/api        NestJS API (modules: auth, users, bookings, parcels, pricing, dispatch, courier, merchants, merchant-api, reports, audit, event-ops)
+apps/api        NestJS API (modules: auth, users, bookings, parcels, pricing, dispatch, courier, merchants, merchant-api, reports, audit, event-ops, ai-tools, oauth, mcp, assistant)
 apps/worker     outbox relay + notification and webhook consumers
 apps/web        Next.js portals: customer, merchant, courier, dispatch, admin
 apps/e2e        Playwright tests
 packages/contracts  shared enums, status graph, event schemas, error codes
 packages/db     Prisma schema (split per module), migrations, seed
 docker/         Dockerfile (dev + prod targets), Caddy gateway, Postgres init
+deploy/helm/    Helm chart for Kubernetes
 docs/           architecture, ADRs, conventions, contracts, member briefs
 ```
 
@@ -80,6 +81,24 @@ docs/           architecture, ADRs, conventions, contracts, member briefs
 - [docs/report/](docs/report/): test report, demo script, use cases, activity diagrams, contribution sheet
 - [docs/release-checklist.md](docs/release-checklist.md): what to check before a demo or release
 - [docs/partner-api.md](docs/partner-api.md) and [docs/security-review.md](docs/security-review.md)
+- [docs/deploy/kubernetes.md](docs/deploy/kubernetes.md) (Helm chart) and
+  [docs/deploy/coolify.md](docs/deploy/coolify.md) (HTTPS hosting, connecting Claude and ChatGPT)
+
+## AI assistant and MCP server
+
+- **Tracking page chatbot.** "Ask SwiftDrop" on `/track` answers "Where is my parcel?" and "How much
+  to send 2 kg to Kandy?" with live data.
+  - It works with any OpenAI-compatible model. Set `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` in
+    `.env`; `.env.example` has presets for OpenAI, DeepSeek and Gemini. Then run `make restart s=api`.
+  - Without a key it says it is switched off.
+- **MCP server for Claude and ChatGPT** at `<APP_URL>/mcp` (Streamable HTTP).
+  - Users connect with OAuth 2.1 (PKCE and dynamic client registration). SwiftDrop is the
+    authorization server and shows its own consent screen.
+  - The tools depend on the signed-in role: track and estimate for everyone, own parcels and booking
+    for customers, orders for merchants, deliveries for couriers, queue, workload, assignment and
+    reports for dispatchers.
+  - Claude and ChatGPT need HTTPS: see [docs/deploy/coolify.md](docs/deploy/coolify.md). The design
+    is in [ADR-0009](docs/architecture/adr/0009-mcp-oauth.md).
 
 ## Known limitations
 
@@ -87,7 +106,9 @@ docs/           architecture, ADRs, conventions, contracts, member briefs
 - SMS is a mock provider that writes a log line. Email goes to Mailpit.
 - The seeded proof of delivery for `SD100000003` has no photo file (object storage isn't part of the
   seed), so its photo view says "not available". Photos taken through the courier screens work.
-- Kubernetes manifests and the AI delivery assistant (the P2 stretch goals) are not built.
+- The Helm chart is validated (`make k8s-lint`) but has not been smoke-tested on a live cluster.
+- AI apps that a user connected over MCP keep access until their tokens expire or are revoked; there
+  is no "connected apps" screen yet.
 - The `make e2e` suite needs the dev stack running and takes a few minutes, mostly page compilation.
 - `make prod-up` serves plain HTTP on localhost. Cookies are marked `Secure` there, which Safari
   refuses over HTTP: run `PROD_COOKIE_SECURE=false make prod-up` for Safari, or put it behind HTTPS.

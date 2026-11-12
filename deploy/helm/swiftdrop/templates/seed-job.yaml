@@ -1,0 +1,29 @@
+{{- if .Values.seed.enabled }}
+# Demo data (test accounts, zones, pricing, demo parcels). Idempotent, so it is safe on every upgrade.
+# Runs migrations first because hooks may start before the API's init container has.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "swiftdrop.fullname" . }}-seed
+  labels: {{- include "swiftdrop.labels" . | nindent 4 }}
+    app.kubernetes.io/component: seed
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels: {{- include "swiftdrop.selector" (list . "seed") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: seed
+          image: {{ include "swiftdrop.image" (list . "migrate") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [sh, -c, 'pnpm exec prisma migrate deploy && pnpm seed']
+          envFrom: {{- include "swiftdrop.envFrom" . | nindent 12 }}
+{{- end }}

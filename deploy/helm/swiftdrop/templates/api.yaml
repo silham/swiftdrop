@@ -1,0 +1,57 @@
+{{- $name := include "swiftdrop.host" (list . "api") }}
+# NestJS API (modular monolith). Migrations run in an init container before the API starts;
+# Prisma takes an advisory lock, so several replicas starting together is safe.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "swiftdrop.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels: {{- include "swiftdrop.selector" (list . "api") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "swiftdrop.selector" (list . "api") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: migrate
+          image: {{ include "swiftdrop.image" (list . "migrate") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom: {{- include "swiftdrop.envFrom" . | nindent 12 }}
+      containers:
+        - name: api
+          image: {{ include "swiftdrop.image" (list . "api") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom: {{- include "swiftdrop.envFrom" . | nindent 12 }}
+          env:
+            - { name: PORT, value: '4000' }
+          ports:
+            - { name: http, containerPort: 4000 }
+          readinessProbe:
+            httpGet: { path: /api/v1/health, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /api/v1/health, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            failureThreshold: 3
+          resources: {{- toYaml .Values.api.resources | nindent 12 }}
+          securityContext: {{- include "swiftdrop.appSecurityContext" . | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "swiftdrop.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "swiftdrop.selector" (list . "api") | nindent 4 }}
+  ports:
+    - { name: http, port: 4000, targetPort: http }

@@ -1,0 +1,62 @@
+{{- $name := include "swiftdrop.host" (list . "rabbitmq") }}
+# RabbitMQ: the swiftdrop.events topic exchange, consumer queues, retry queues and DLQ.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels: {{- include "swiftdrop.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rabbitmq
+spec:
+  serviceName: {{ $name }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "swiftdrop.selector" (list . "rabbitmq") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "swiftdrop.selector" (list . "rabbitmq") | nindent 8 }}
+    spec:
+      hostname: rabbitmq   # stable node name, so the data volume is re-used after a restart
+      containers:
+        - name: rabbitmq
+          image: {{ .Values.rabbitmq.image }}
+          env:
+            - { name: RABBITMQ_DEFAULT_USER, value: {{ .Values.rabbitmq.user | quote }} }
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom: { secretKeyRef: { name: {{ include "swiftdrop.secretName" . }}, key: RABBITMQ_DEFAULT_PASS } }
+          ports:
+            - { name: amqp, containerPort: 5672 }
+            - { name: management, containerPort: 15672 }
+          readinessProbe:
+            exec: { command: [rabbitmq-diagnostics, -q, ping] }
+            periodSeconds: 10
+            timeoutSeconds: 10
+          livenessProbe:
+            exec: { command: [rabbitmq-diagnostics, -q, ping] }
+            initialDelaySeconds: 40
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/rabbitmq }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.rabbitmq.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests: { storage: {{ .Values.rabbitmq.storage }} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "swiftdrop.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "swiftdrop.selector" (list . "rabbitmq") | nindent 4 }}
+  ports:
+    - { name: amqp, port: 5672, targetPort: amqp }
+    - { name: management, port: 15672, targetPort: management }

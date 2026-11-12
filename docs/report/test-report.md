@@ -1,6 +1,6 @@
 # Test report
 
-Branch `m01/p0-gaps` (P0 committed as `a7c7929`, P1 changes in the working tree), run on
+Branch `m01/p0-gaps` (P0 `a7c7929`, P1 `64a606c`, then the bonus items: AI assistant, MCP server, Helm chart), run on
 2026-11-13 against the Docker stack. Every number below comes from a real run on that date; how to
 reproduce each one is in the last column.
 
@@ -8,13 +8,13 @@ reproduce each one is in the last column.
 
 | Suite                            | What it covers                                                                       | Result                                         | Command         |
 | -------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------- | --------------- |
-| Unit: API                        | Business rules per service (no database)                                             | **239 passed** (22 suites)                     | `make test`     |
+| Unit: API                        | Business rules per service (no database)                                             | **274 passed** (26 suites)                     | `make test`     |
 | Unit: worker                     | Outbox relay, retry decisions, signatures, templates, masking                        | **30 passed** (6 suites)                       | `make test`     |
 | Unit: contracts                  | Status graph, event schemas                                                          | **3 passed** (1 suite)                         | `make test`     |
 | Unit: web                        | Booking form logic, API mapping, parcel details render, proof photo, courier buttons | **15 passed** (5 files)                        | `make test`     |
-| Integration: API                 | Real Postgres, RabbitMQ and object storage; every endpoint incl. negative auth       | **344 passed** (22 suites)                     | `make test-int` |
-| Merged coverage (API)            | Unit + integration in one run                                                        | **lines 92.08 %** (threshold 88 %)             | `make coverage` |
-| End to end (Playwright)          | User journeys through the browser, desktop and phone                                 | **28 passed**, 1 skipped (desktop 24, phone 4) | `make e2e`      |
+| Integration: API                 | Real Postgres, RabbitMQ and object storage; every endpoint incl. negative auth       | **380 passed** (24 suites)                     | `make test-int` |
+| Merged coverage (API)            | Unit + integration in one run                                                        | **lines 92.90 %** (threshold 88 %)             | `make coverage` |
+| End to end (Playwright)          | User journeys through the browser, desktop and phone                                 | **31 passed**, 1 skipped (desktop 27, phone 4) | `make e2e`      |
 | Production-like stack            | `make prod-up` smoke test                                                            | **passed** after two fixes (see section 5)     | see section 5   |
 | Lint, typecheck, migration drift | Whole repository                                                                     | **0 errors** (6 old `any` warnings), no drift  | `make check`    |
 
@@ -25,12 +25,12 @@ and writes a single report to `apps/api/coverage/merged/index.html`.
 
 | Metric     | Covered             | Threshold (run fails below it) |
 | ---------- | ------------------- | ------------------------------ |
-| Lines      | 92.08 % (1419/1541) | 88 %                           |
-| Statements | 90.60 % (1553/1714) | 86 %                           |
-| Functions  | 91.91 % (341/371)   | 87 %                           |
-| Branches   | 80.57 % (697/865)   | 75 %                           |
+| Lines      | 92.90 % (1807/1945) | 88 %                           |
+| Statements | 90.71 % (1984/2187) | 86 %                           |
+| Functions  | 91.36 % (434/475)   | 87 %                           |
+| Branches   | 80.88 % (897/1109)  | 75 %                           |
 
-583 tests, 44 suites in that run. **The gate works:** running only the unit project against the same
+654 tests, 50 suites in that run. **The gate works:** running only the unit project against the same
 thresholds gives 62.79 % lines and the command exits with code 1 ("does not meet global threshold").
 Unit tests alone cover about two thirds of the API; the integration tests are what reach the
 controllers, guards, transactions and the event path.
@@ -41,23 +41,25 @@ Worker and contracts have their own unit coverage (`pnpm --filter @swiftdrop/wor
 
 Highlights, by business rule (all in `apps/api/test/`):
 
-| Area          | Checked                                                                                                                                                          |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Authorization | Every endpoint: anonymous → 401, wrong role → 403, someone else's resource → 404 (`auth-matrix`, plus per-module suites)                                         |
-| Sessions      | Refresh rotation, reuse detection revokes all sessions, `/auth/resume` redirects only to same-site paths, disabled accounts                                      |
-| Booking       | Real fee from the pricing rules (client fee rejected), CREATED history row and `parcel.created` event in the same transaction, customer only sees own parcels    |
-| Lifecycle     | Every invalid transition → 409, FAILED needs a reason, DELIVERED needs proof, max 3 attempts, concurrent updates → 409                                           |
-| Courier       | Cross-courier 404, upload checks (fake JPEG → 400, > 5 MB → 413, no photo → 422), proof + DELIVERED + assignment completed together, photo access rules          |
-| Dispatch      | Double assignment → 409, two simultaneous assignments → exactly one wins, capacity, failed-parcel rules, active assignment list                                  |
-| Live tracking | A committed status change travels outbox → relay → RabbitMQ → the API's SSE queue → an open HTTP stream; other parcels' updates never leak into a stream         |
-| Merchants     | API key only shown once, keys hashed, idempotent partner orders (201 then 200), cross-merchant 404, webhook audit with URL host only, paged attempts, rate limit |
-| Events        | Relay order and retries, notification and webhook consumers, HMAC signature, retry queues and dead letter queue, admin re-send                                   |
-| Audit         | Zone, pricing, webhook, API key and dispatch changes write their audit entry in the same transaction; secrets never stored                                       |
+| Area          | Checked                                                                                                                                                                                                                                                                                                               |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authorization | Every endpoint: anonymous → 401, wrong role → 403, someone else's resource → 404 (`auth-matrix`, plus per-module suites)                                                                                                                                                                                              |
+| Sessions      | Refresh rotation, reuse detection revokes all sessions, `/auth/resume` redirects only to same-site paths, disabled accounts                                                                                                                                                                                           |
+| Booking       | Real fee from the pricing rules (client fee rejected), CREATED history row and `parcel.created` event in the same transaction, customer only sees own parcels                                                                                                                                                         |
+| Lifecycle     | Every invalid transition → 409, FAILED needs a reason, DELIVERED needs proof, max 3 attempts, concurrent updates → 409                                                                                                                                                                                                |
+| Courier       | Cross-courier 404, upload checks (fake JPEG → 400, > 5 MB → 413, no photo → 422), proof + DELIVERED + assignment completed together, photo access rules                                                                                                                                                               |
+| Dispatch      | Double assignment → 409, two simultaneous assignments → exactly one wins, capacity, failed-parcel rules, active assignment list                                                                                                                                                                                       |
+| Live tracking | A committed status change travels outbox → relay → RabbitMQ → the API's SSE queue → an open HTTP stream; other parcels' updates never leak into a stream                                                                                                                                                              |
+| Merchants     | API key only shown once, keys hashed, idempotent partner orders (201 then 200), cross-merchant 404, webhook audit with URL host only, paged attempts, rate limit                                                                                                                                                      |
+| Events        | Relay order and retries, notification and webhook consumers, HMAC signature, retry queues and dead letter queue, admin re-send                                                                                                                                                                                        |
+| Audit         | Zone, pricing, webhook, API key and dispatch changes write their audit entry in the same transaction; secrets never stored                                                                                                                                                                                            |
+| MCP + OAuth   | Discovery documents, 401 + `WWW-Authenticate`, client registration rules, consent (no redirect to unregistered URIs), PKCE, single-use codes, refresh rotation and replay revocation, revocation, expired tokens, disabled users; tools per role; courier-vs-courier and customer-vs-customer refused through MCP too |
+| AI assistant  | Model mocked: tool calls reach the real tracking service, only public tools offered, private tools refused, 503 without a key or when the model fails (no upstream detail leaked), input limits, rate limit                                                                                                           |
 
 ## 3. End-to-end journeys
 
-`make e2e` on 2026-11-13: **28 passed, 1 skipped, 0 failed** in 1.1 minutes. The desktop project
-(Chrome) ran 24 tests; the phone project (Pixel 7, tests tagged `@mobile`) ran 4. The skipped test is
+`make e2e` on 2026-11-13: **31 passed, 1 skipped, 0 failed** in 1.3 minutes. The desktop project
+(Chrome) ran 27 tests; the phone project (Pixel 7, tests tagged `@mobile`) ran 4. The skipped test is
 the phone-only navigation drawer check, which the desktop project skips on purpose.
 
 The suite signs every role in once through the real login API (`apps/e2e/global-setup.ts`), so it
@@ -65,16 +67,17 @@ does not depend on the dev login panel and stays under the login rate limit. Bef
 finishes parcels that earlier runs left with the demo courier, so the courier never hits their
 capacity limit.
 
-| Spec                                | Journey                                                                                                                         |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `delivery-journey.spec.ts`          | Customer books → dispatcher assigns in the UI → courier delivers with a photo → public tracking, proof photo and delivery email |
-| `customer-booking.spec.ts`          | Booking form with server price, confirmation, My deliveries, PDF receipt, form validation                                       |
-| `courier-deliver.spec.ts`           | On a phone (`@mobile`): report a problem, re-attempt, photo required, deliver; another courier gets 404                         |
-| `live-tracking.spec.ts`             | Public tracking page updates without reload as the courier changes the status                                                   |
-| `merchant-api.spec.ts`              | Generate an API key in the portal, create an order with it (201, then 200 on retry), wrong key → 401                            |
-| `dispatch-unassign.spec.ts`         | Unassign from the Active assignments card; a parcel on the road can't be unassigned                                             |
-| `event-ops.spec.ts`                 | Admin sees outbox, queues and webhook attempts; a customer is kept out; the API rejects anonymous callers                       |
-| `smoke.spec.ts`, `ui-shell.spec.ts` | Landing page, tracking search, health, redirects, navigation on desktop and phone                                               |
+| Spec                                | Journey                                                                                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `delivery-journey.spec.ts`          | Customer books → dispatcher assigns in the UI → courier delivers with a photo → public tracking, proof photo and delivery email                  |
+| `customer-booking.spec.ts`          | Booking form with server price, confirmation, My deliveries, PDF receipt, form validation                                                        |
+| `courier-deliver.spec.ts`           | On a phone (`@mobile`): report a problem, re-attempt, photo required, deliver; another courier gets 404                                          |
+| `live-tracking.spec.ts`             | Public tracking page updates without reload as the courier changes the status                                                                    |
+| `merchant-api.spec.ts`              | Generate an API key in the portal, create an order with it (201, then 200 on retry), wrong key → 401                                             |
+| `dispatch-unassign.spec.ts`         | Unassign from the Active assignments card; a parcel on the road can't be unassigned                                                              |
+| `event-ops.spec.ts`                 | Admin sees outbox, queues and webhook attempts; a customer is kept out; the API rejects anonymous callers                                        |
+| `ai-assistant.spec.ts`              | MCP consent: an AI app is approved and receives a code it can exchange for a token; unknown apps get an error page; chatbot on the tracking page |
+| `smoke.spec.ts`, `ui-shell.spec.ts` | Landing page, tracking search, health, redirects, navigation on desktop and phone                                                                |
 
 ## 4. Static checks
 
@@ -129,4 +132,7 @@ and the final `make check` and `make e2e` above ran after these fixes.
   first run after `make up` can be slow; timeouts are set generously for that.
 - The production `migrate` step does not seed data. That's right for a real deployment, but a demo on
   the production stack needs the seed command from section 5 once.
-- Not built (P2 stretch goals): Kubernetes manifests, AI delivery assistant.
+- Kubernetes: the Helm chart passes `helm lint` and kubeconform (17 manifests valid for Kubernetes
+  1.34). It has not been deployed to a live cluster.
+- The chatbot is tested with a mocked model. A live model needs `LLM_API_KEY`, and Claude and ChatGPT
+  need the HTTPS deployment ([coolify.md](../deploy/coolify.md)).

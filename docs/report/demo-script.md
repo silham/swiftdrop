@@ -90,6 +90,25 @@ _Say:_ the proof photo is checked by its content, not its file name, and stored 
 3. **Event operations** (`/admin/ops`): outbox, queues and the dead letter queue.
 4. **Users**: filter by role and status; disable and re-enable an account.
 
+## 8. AI assistant and MCP (3 min, bonus)
+
+1. On `/track/SD100000002` click **Ask SwiftDrop**. Ask "Where is my parcel?", then "How much to send
+   2 kg to Kandy?". The answers come from the live tracking and pricing services. This needs
+   `LLM_API_KEY` in `.env`.
+2. In Claude (Settings → Connectors, URL `https://<your host>/mcp`) or ChatGPT developer mode, connect
+   SwiftDrop. Sign in as the customer and press **Allow** on SwiftDrop's consent screen.
+3. Ask Claude "List my parcels" and "Where is SD100000002?". Then reconnect as the dispatcher and ask
+   "Who has the lightest workload?". Different roles get different tools.
+4. Point out: courier2 asking to update courier1's parcel gets "Parcel not found", the same rule as in
+   the app. See [ADR-0009](../architecture/adr/0009-mcp-oauth.md) and
+   [coolify.md](../deploy/coolify.md).
+
+## 9. Kubernetes (1 min, bonus)
+
+Show `deploy/helm/swiftdrop` (ConfigMap, Secret, Services, Ingress, StatefulSets) and run
+`make k8s-lint`: every manifest validates. [kubernetes.md](../deploy/kubernetes.md) explains how to
+install it.
+
 ## Security checks worth showing (2 min)
 
 - As the customer, open `/admin`: you are sent back to `/customer`. Call `/api/v1/admin/users` with the customer's cookie: `403`.

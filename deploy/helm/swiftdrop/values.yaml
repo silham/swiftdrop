@@ -1,0 +1,96 @@
+# SwiftDrop Helm values. Owner: M10 (chart by M1). See docs/deploy/kubernetes.md.
+# Local images: `make k8s-images` builds swiftdrop/{api,worker,web,migrate}:local.
+
+image:
+  registry: '' # e.g. ghcr.io/silham/ — empty for locally built images
+  tag: local
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Public URL users and AI clients reach (Ingress host). Used for OAuth issuer, cookies, emails.
+appUrl: http://swiftdrop.localhost
+corsOrigins: '' # defaults to appUrl
+
+api:
+  replicas: 2 # >1 shows the SSE fan-out: every instance has its own RabbitMQ queue
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+worker:
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 192Mi }
+    limits: { memory: 384Mi }
+web:
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 192Mi }
+    limits: { memory: 512Mi }
+
+# Non-secret settings → ConfigMap
+config:
+  LOG_LEVEL: info
+  COOKIE_SECURE: 'false' # set 'true' when the Ingress serves HTTPS
+  JWT_ACCESS_TTL_SECONDS: '900'
+  JWT_REFRESH_TTL_DAYS: '7'
+  JWT_ISSUER: swiftdrop-api
+  JWT_AUDIENCE: swiftdrop-web
+  THROTTLE_TTL_MS: '60000'
+  THROTTLE_LIMIT: '300'
+  TRUST_PROXY_HOPS: '1' # the ingress controller
+  GOOGLE_CLIENT_ID: ''
+  LLM_BASE_URL: https://api.openai.com/v1
+  LLM_MODEL: ''
+  LLM_TIMEOUT_MS: '20000'
+  UPLOAD_MAX_BYTES: '5242880'
+  S3_BUCKET_POD: proof-of-delivery
+  OUTBOX_POLL_INTERVAL_MS: '1000'
+  OUTBOX_BATCH_SIZE: '50'
+  MAIL_FROM: SwiftDrop <no-reply@swiftdrop.test>
+  SMS_PROVIDER: log
+  WEBHOOK_TIMEOUT_MS: '5000'
+  WEBHOOK_RETRY_DELAYS_MS: '10000,60000,300000'
+
+# Secrets → Secret. Empty values are generated once and kept across upgrades.
+# For real deployments create the Secret yourself and set existingSecret (keys: see templates/secret.yaml).
+existingSecret: ''
+secrets:
+  JWT_ACCESS_SECRET: ''
+  JWT_REFRESH_SECRET: ''
+  WEBHOOK_SECRET_ENC_KEY: '' # base64 of 32 bytes
+  GOOGLE_CLIENT_SECRET: ''
+  LLM_API_KEY: ''
+  postgresPassword: ''
+  rabbitmqPassword: ''
+  storageSecretKey: ''
+
+postgres:
+  image: postgres:17-alpine
+  user: swiftdrop
+  database: swiftdrop
+  storage: 2Gi
+  storageClass: '' # cluster default
+rabbitmq:
+  image: rabbitmq:4.1-management-alpine
+  user: swiftdrop
+  storage: 1Gi
+  storageClass: ''
+storage: # S3-compatible object storage for proof-of-delivery photos (RustFS)
+  image: rustfs/rustfs:1.0.3
+  accessKey: swiftdrop
+  size: 2Gi
+  storageClass: ''
+mailpit:
+  enabled: true # captured emails; port-forward svc/<release>-mailpit 8025
+  image: axllent/mailpit:v1.27
+
+# Demo data (test accounts, zones, pricing, demo parcels). Runs as a Helm hook after install/upgrade.
+seed:
+  enabled: true
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations: {}
+  host: swiftdrop.localhost
+  tls: [] # e.g. [{ secretName: swiftdrop-tls, hosts: [swiftdrop.example.com] }]
