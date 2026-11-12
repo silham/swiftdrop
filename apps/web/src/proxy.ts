@@ -26,5 +26,7 @@ export const config = {
     '/courier/:path*',
     '/dispatch/:path*',
     '/admin/:path*',
+    // MCP consent screen: sign in first, then come back with the same query string.
+    '/oauth/:path*',
   ],
 };

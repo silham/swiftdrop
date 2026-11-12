@@ -28,6 +28,9 @@ import { ParcelsModule } from './modules/parcels'; // M4
 import { PricingModule } from './modules/pricing'; // M7
 import { ReportsModule } from './modules/reports'; // M9
 import { UsersModule } from './modules/users'; // M2
+import { OAuthModule } from './modules/oauth'; // M1 (MCP authorization server)
+import { McpModule } from './modules/mcp'; // M1
+import { AssistantModule } from './modules/assistant'; // M1
 
 @Module({
   imports: [
@@ -57,6 +60,9 @@ import { UsersModule } from './modules/users'; // M2
     MerchantApiModule,
     ReportsModule,
     EventOpsModule,
+    OAuthModule,
+    McpModule,
+    AssistantModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

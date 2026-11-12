@@ -2,6 +2,7 @@ import type { ParcelStatus } from '@swiftdrop/contracts';
 import { CircleQuestionMark, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { Alert, EmptyState, PageHeader } from '@/components/ui';
+import { AssistantLauncher } from '@/features/assistant';
 import { TrackForm, TrackingView } from '@/features/tracking';
 import { errorCode, errorMessage } from '@/lib/api/errors';
 import { serverApi } from '@/lib/api/server';
@@ -89,6 +90,7 @@ export default async function TrackPage({
           </div>
         </aside>
       </div>
+      <AssistantLauncher trackingNumber={parcel ? trackingNumber : undefined} />
     </main>
   );
 }

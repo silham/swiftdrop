@@ -2,7 +2,8 @@
  * Shared HTTP app configuration — used by main.ts, the OpenAPI exporter and integration tests,
  * so all three behave identically. Owner: M1.
  */
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, RequestMethod, ValidationPipe } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import { AUTH_COOKIES, MERCHANT_API_KEY_HEADER } from '@swiftdrop/contracts';
 import cookieParser from 'cookie-parser';
@@ -26,11 +27,30 @@ export const SWAGGER_TAGS = [
   'audit',
   'event-ops',
   'dev',
+  'oauth',
+  'mcp',
+  'assistant',
 ] as const;
+
+/**
+ * Routes that must live at the site root, not under /api/v1: OAuth discovery documents
+ * (RFC 8414 / 9728 fix their paths) and the MCP endpoint that Claude and ChatGPT connect to.
+ */
+export const ROOT_ROUTES = [
+  '.well-known/oauth-authorization-server',
+  '.well-known/openid-configuration',
+  '.well-known/oauth-protected-resource',
+  '.well-known/oauth-protected-resource/mcp',
+  'mcp',
+];
 
 export function configureApp(app: INestApplication, config: Env) {
   app.use(requestContextMiddleware);
-  app.setGlobalPrefix('api/v1');
+  // Behind the gateway every request would otherwise come from one IP (rate limits per client).
+  (app as NestExpressApplication).set?.('trust proxy', config.TRUST_PROXY_HOPS);
+  app.setGlobalPrefix('api/v1', {
+    exclude: ROOT_ROUTES.map((path) => ({ path, method: RequestMethod.ALL })),
+  });
   app.use(helmet());
   app.use(cookieParser());
   app.enableCors({ origin: config.CORS_ORIGINS.split(','), credentials: true });

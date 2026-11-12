@@ -35,6 +35,8 @@ export const ERROR_CODES = {
   // uploads (M6)
   UNSUPPORTED_FILE: 'UNSUPPORTED_FILE',
   FILE_TOO_LARGE: 'FILE_TOO_LARGE',
+  // AI assistant (M1)
+  ASSISTANT_UNAVAILABLE: 'ASSISTANT_UNAVAILABLE',
 } as const;
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 

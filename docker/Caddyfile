@@ -10,6 +10,12 @@
 		}
 	}
 
+	# MCP endpoint and OAuth discovery documents live at the site root (RFC 8414 / 9728), served by the API.
+	@apiRoot path /mcp /.well-known/oauth-authorization-server /.well-known/openid-configuration /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/*
+	handle @apiRoot {
+		reverse_proxy api:4000
+	}
+
 	handle {
 		reverse_proxy web:3000
 	}

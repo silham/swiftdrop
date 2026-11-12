@@ -1,5 +1,6 @@
 import { CircleX, PackageCheck, PackagePlus, PackageSearch, Truck, Warehouse } from 'lucide-react';
 import Link from 'next/link';
+import { AssistantLauncher } from '@/features/assistant';
 import { TrackForm } from '@/features/tracking';
 
 export const metadata = { title: 'Track a parcel' };
@@ -100,6 +101,7 @@ export default function TrackSearchPage() {
           in under a minute.
         </p>
       </section>
+      <AssistantLauncher />
     </main>
   );
 }
