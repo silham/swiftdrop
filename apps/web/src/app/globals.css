@@ -1,24 +1,300 @@
 @import 'tailwindcss';
 
 /*
- * Design tokens — use these (e.g. bg-brand, text-muted) instead of raw colours so the UI stays
- * consistent across portals. Owner: M1 + M10. Add tokens via PR; don't hard-code hex values in features.
+ * Design tokens. Use these (bg-surface, text-ink, text-muted, border-line, bg-brand…) instead of
+ * Tailwind palette classes so every page works in light AND dark mode. Owner: M1 + M10.
+ *
+ * - Raw values live in --sd-* variables: light on :root, dark under [data-theme='dark'] and under
+ *   [data-theme='system'] when the OS prefers dark. <html data-theme> is set from the sd_theme cookie.
+ * - @theme inline maps them to Tailwind colours, so utilities switch theme automatically.
+ * - Need a new colour? Add a token here via PR. Don't hard-code hex or palette classes in features.
  */
-@theme {
-  --color-brand: #1d4ed8;
-  --color-brand-dark: #1e3a8a;
-  --color-brand-soft: #dbeafe;
-  --color-ink: #0f172a;
-  --color-muted: #64748b;
-  --color-line: #e2e8f0;
-  --color-surface: #ffffff;
-  --color-canvas: #f8fafc;
-  --color-success: #15803d;
-  --color-warning: #b45309;
-  --color-danger: #b91c1c;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+:root {
+  color-scheme: light;
+  --sd-brand: #e4580b;
+  --sd-brand-hover: #c2470a;
+  --sd-brand-dark: #b54708;
+  --sd-brand-soft: #fff1e6;
+  --sd-brand-fg: #ffffff;
+  --sd-ink: #101828;
+  --sd-muted: #5b6577;
+  --sd-subtle: #8a93a5;
+  --sd-line: #e4e7ec;
+  --sd-line-strong: #d0d5dd;
+  --sd-surface: #ffffff;
+  --sd-surface-2: #f8f9fb;
+  --sd-canvas: #f3f5f8;
+  --sd-overlay: rgb(15 23 42 / 0.55);
+  --sd-ring: rgb(228 88 11 / 0.35);
+  --sd-success: #067647;
+  --sd-success-soft: #ecfdf3;
+  --sd-warning: #b25e09;
+  --sd-warning-soft: #fffaeb;
+  --sd-danger: #d92d20;
+  --sd-danger-soft: #fef3f2;
+  --sd-danger-fg: #ffffff;
+  --sd-info: #1570ef;
+  --sd-info-soft: #eff8ff;
+  --sd-violet: #6941c6;
+  --sd-violet-soft: #f4f3ff;
+  --sd-sidebar: #14213d;
+  --sd-sidebar-2: #1b2b4d;
+  --sd-sidebar-ink: #eef1f7;
+  --sd-sidebar-muted: #9aa6bf;
+  --sd-sidebar-line: rgb(255 255 255 / 0.08);
+  --sd-sidebar-active: rgb(255 107 0 / 0.16);
+  --sd-logo-ink: #14213d;
+  --sd-logo-orange: #ff6b00;
+  --sd-chart-1: #ff6b00;
+  --sd-chart-2: #2e5aac;
+  --sd-chart-3: #12b76a;
+  --sd-chart-4: #f04438;
+  --sd-chart-5: #7a5af8;
+  --sd-chart-6: #06aed4;
+  --sd-shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.06);
 }
 
-body {
-  @apply bg-canvas text-ink antialiased;
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --sd-brand: #ff7a1a;
+  --sd-brand-hover: #ff9447;
+  --sd-brand-dark: #ffa766;
+  --sd-brand-soft: rgb(255 122 26 / 0.14);
+  --sd-brand-fg: #0b1220;
+  --sd-ink: #e8ecf3;
+  --sd-muted: #98a3b8;
+  --sd-subtle: #6b7891;
+  --sd-line: #222f4a;
+  --sd-line-strong: #2f3f61;
+  --sd-surface: #101a2e;
+  --sd-surface-2: #15213a;
+  --sd-canvas: #0a1222;
+  --sd-overlay: rgb(2 6 16 / 0.7);
+  --sd-ring: rgb(255 122 26 / 0.4);
+  --sd-success: #47cd89;
+  --sd-success-soft: rgb(71 205 137 / 0.12);
+  --sd-warning: #fdb022;
+  --sd-warning-soft: rgb(253 176 34 / 0.12);
+  --sd-danger: #f97066;
+  --sd-danger-soft: rgb(249 112 102 / 0.13);
+  --sd-danger-fg: #0b1220;
+  --sd-info: #53b1fd;
+  --sd-info-soft: rgb(83 177 253 / 0.12);
+  --sd-violet: #a48afb;
+  --sd-violet-soft: rgb(164 138 251 / 0.13);
+  --sd-sidebar: #0d1628;
+  --sd-sidebar-2: #14203a;
+  --sd-sidebar-ink: #eef1f7;
+  --sd-sidebar-muted: #8e9ab3;
+  --sd-sidebar-line: rgb(255 255 255 / 0.07);
+  --sd-sidebar-active: rgb(255 122 26 / 0.16);
+  --sd-logo-ink: #f1f4f9;
+  --sd-logo-orange: #ff7a1a;
+  --sd-chart-1: #ff7a1a;
+  --sd-chart-2: #6c8ef0;
+  --sd-chart-3: #32d583;
+  --sd-chart-4: #f97066;
+  --sd-chart-5: #a48afb;
+  --sd-chart-6: #22ccee;
+  --sd-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='system'] {
+    color-scheme: dark;
+    --sd-brand: #ff7a1a;
+    --sd-brand-hover: #ff9447;
+    --sd-brand-dark: #ffa766;
+    --sd-brand-soft: rgb(255 122 26 / 0.14);
+    --sd-brand-fg: #0b1220;
+    --sd-ink: #e8ecf3;
+    --sd-muted: #98a3b8;
+    --sd-subtle: #6b7891;
+    --sd-line: #222f4a;
+    --sd-line-strong: #2f3f61;
+    --sd-surface: #101a2e;
+    --sd-surface-2: #15213a;
+    --sd-canvas: #0a1222;
+    --sd-overlay: rgb(2 6 16 / 0.7);
+    --sd-ring: rgb(255 122 26 / 0.4);
+    --sd-success: #47cd89;
+    --sd-success-soft: rgb(71 205 137 / 0.12);
+    --sd-warning: #fdb022;
+    --sd-warning-soft: rgb(253 176 34 / 0.12);
+    --sd-danger: #f97066;
+    --sd-danger-soft: rgb(249 112 102 / 0.13);
+    --sd-danger-fg: #0b1220;
+    --sd-danger-fg: #0b1220;
+    --sd-info: #53b1fd;
+    --sd-info-soft: rgb(83 177 253 / 0.12);
+    --sd-violet: #a48afb;
+    --sd-violet-soft: rgb(164 138 251 / 0.13);
+    --sd-sidebar: #0d1628;
+    --sd-sidebar-2: #14203a;
+    --sd-sidebar-ink: #eef1f7;
+    --sd-sidebar-muted: #8e9ab3;
+    --sd-sidebar-line: rgb(255 255 255 / 0.07);
+    --sd-sidebar-active: rgb(255 122 26 / 0.16);
+    --sd-logo-ink: #f1f4f9;
+    --sd-logo-orange: #ff7a1a;
+    --sd-chart-1: #ff7a1a;
+    --sd-chart-2: #6c8ef0;
+    --sd-chart-3: #32d583;
+    --sd-chart-4: #f97066;
+    --sd-chart-5: #a48afb;
+    --sd-chart-6: #22ccee;
+    --sd-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.25);
+  }
+}
+
+/* `dark:` follows the cookie choice, and the OS when the choice is "system". Prefer tokens. */
+@custom-variant dark {
+  &:where([data-theme='dark'], [data-theme='dark'] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where([data-theme='system'], [data-theme='system'] *) {
+      @slot;
+    }
+  }
+}
+
+@theme inline {
+  --color-brand: var(--sd-brand);
+  --color-brand-hover: var(--sd-brand-hover);
+  --color-brand-dark: var(--sd-brand-dark);
+  --color-brand-soft: var(--sd-brand-soft);
+  --color-brand-fg: var(--sd-brand-fg);
+  --color-ink: var(--sd-ink);
+  --color-muted: var(--sd-muted);
+  --color-subtle: var(--sd-subtle);
+  --color-line: var(--sd-line);
+  --color-line-strong: var(--sd-line-strong);
+  --color-surface: var(--sd-surface);
+  --color-surface-2: var(--sd-surface-2);
+  --color-canvas: var(--sd-canvas);
+  --color-overlay: var(--sd-overlay);
+  --color-ring: var(--sd-ring);
+  --color-success: var(--sd-success);
+  --color-success-soft: var(--sd-success-soft);
+  --color-warning: var(--sd-warning);
+  --color-warning-soft: var(--sd-warning-soft);
+  --color-danger: var(--sd-danger);
+  --color-danger-soft: var(--sd-danger-soft);
+  --color-danger-fg: var(--sd-danger-fg);
+  --color-info: var(--sd-info);
+  --color-info-soft: var(--sd-info-soft);
+  --color-violet: var(--sd-violet);
+  --color-violet-soft: var(--sd-violet-soft);
+  --color-sidebar: var(--sd-sidebar);
+  --color-sidebar-2: var(--sd-sidebar-2);
+  --color-sidebar-ink: var(--sd-sidebar-ink);
+  --color-sidebar-muted: var(--sd-sidebar-muted);
+  --color-sidebar-line: var(--sd-sidebar-line);
+  --color-sidebar-active: var(--sd-sidebar-active);
+  --color-logo-ink: var(--sd-logo-ink);
+  --color-logo-orange: var(--sd-logo-orange);
+  --color-chart-1: var(--sd-chart-1);
+  --color-chart-2: var(--sd-chart-2);
+  --color-chart-3: var(--sd-chart-3);
+  --color-chart-4: var(--sd-chart-4);
+  --color-chart-5: var(--sd-chart-5);
+  --color-chart-6: var(--sd-chart-6);
+  --shadow-card: var(--sd-shadow);
+}
+
+@theme {
+  --font-sans:
+    var(--font-inter), 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  --animate-fade-in: fade-in 150ms ease-out;
+  --animate-slide-in-right: slide-in-right 200ms ease-out;
+  --animate-slide-in-left: slide-in-left 200ms ease-out;
+  --animate-pop-in: pop-in 150ms ease-out;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes slide-in-right {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+  @keyframes slide-in-left {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97) translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-canvas text-ink antialiased;
+    font-feature-settings:
+      'cv11' 1,
+      'ss01' 1;
+  }
+  ::selection {
+    background: var(--sd-brand-soft);
+  }
+  :focus-visible {
+    outline: 2px solid var(--sd-brand);
+    outline-offset: 2px;
+  }
+  /* Native inputs use the token surface in dark mode too. */
+  input,
+  select,
+  textarea {
+    color: inherit;
+  }
+  * {
+    scrollbar-color: var(--sd-line-strong) transparent;
+  }
+}
+
+@utility sr-only-table {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

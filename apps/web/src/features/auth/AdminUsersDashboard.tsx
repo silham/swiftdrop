@@ -1,7 +1,27 @@
 'use client';
 
+import { Search, ShieldCheck, Store, UserPlus, Users, UserCheck } from 'lucide-react';
 import { useState } from 'react';
-import { Alert, Button, Card, EmptyState, Input, Table, type Column } from '@/components/ui';
+import {
+  Alert,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  Input,
+  Select,
+  Skeleton,
+  StatCard,
+  StatGrid,
+  Table,
+  Tabs,
+  Toolbar,
+  type BadgeTone,
+  type Column,
+} from '@/components/ui';
+import { formatDate, formatNumber } from '@/lib/format';
 import { api } from '@/lib/api/client';
 import { errorMessage } from '@/lib/api/errors';
 import type { Role } from '@swiftdrop/contracts';
@@ -22,13 +42,23 @@ interface AdminUsersDashboardProps {
   initialTotal: number;
 }
 
-const ROLE_BADGE_STYLES: Record<Role, string> = {
-  ADMIN: 'bg-purple-100 text-purple-800 border-purple-200',
-  DISPATCHER: 'bg-blue-100 text-blue-800 border-blue-200',
-  COURIER: 'bg-amber-100 text-amber-800 border-amber-200',
-  MERCHANT: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-  CUSTOMER: 'bg-slate-100 text-slate-700 border-slate-200',
+const ROLE_TONE: Record<Role, BadgeTone> = {
+  ADMIN: 'violet',
+  DISPATCHER: 'info',
+  COURIER: 'warning',
+  MERCHANT: 'success',
+  CUSTOMER: 'neutral',
 };
+
+const ROLE_LABEL: Record<Role, string> = {
+  ADMIN: 'Admin',
+  DISPATCHER: 'Dispatcher',
+  COURIER: 'Courier',
+  MERCHANT: 'Merchant',
+  CUSTOMER: 'Customer',
+};
+
+const STAFF_ROLES: Role[] = ['ADMIN', 'DISPATCHER', 'COURIER'];
 
 const ROLES_LIST: { label: string; value: Role | 'ALL' }[] = [
   { label: 'All Users', value: 'ALL' },
@@ -39,25 +69,47 @@ const ROLES_LIST: { label: string; value: Role | 'ALL' }[] = [
   { label: 'Customers', value: 'CUSTOMER' },
 ];
 
-export function AdminUsersDashboard({ initialUsers }: AdminUsersDashboardProps) {
+type StatusFilter = 'ALL' | 'ACTIVE' | 'DISABLED';
+
+const STATUS_TABS: { value: StatusFilter; label: string }[] = [
+  { value: 'ALL', label: 'Any status' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'DISABLED', label: 'Disabled' },
+];
+
+export function AdminUsersDashboard({ initialUsers, initialTotal }: AdminUsersDashboardProps) {
   const [users, setUsers] = useState<UserRow[]>(initialUsers);
+  // Unfiltered snapshot (first page) that powers the KPI tiles; kept in sync with local edits.
+  const [baseline, setBaseline] = useState<UserRow[]>(initialUsers);
   const [roleFilter, setRoleFilter] = useState<Role | 'ALL'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [updatingId, setUpdatingId] = useState<string>();
 
-  async function loadUsers(targetRole = roleFilter, targetSearch = search) {
+  async function loadUsers(
+    targetRole = roleFilter,
+    targetSearch = search,
+    targetStatus = statusFilter,
+  ) {
     setLoading(true);
     setError(undefined);
 
-    const query: { page: number; pageSize: number; role?: Role; search?: string } = {
+    const query: {
+      page: number;
+      pageSize: number;
+      role?: Role;
+      search?: string;
+      isActive?: boolean;
+    } = {
       page: 1,
       pageSize: 100,
     };
     if (targetRole !== 'ALL') query.role = targetRole;
     if (targetSearch.trim()) query.search = targetSearch.trim();
+    if (targetStatus !== 'ALL') query.isActive = targetStatus === 'ACTIVE';
 
     const { data, error: apiErr } = await api.GET('/api/v1/admin/users', {
       params: { query },
@@ -69,7 +121,9 @@ export function AdminUsersDashboard({ initialUsers }: AdminUsersDashboardProps) 
       return setError(errorMessage(apiErr, 'Failed to fetch users'));
     }
 
-    setUsers((data.data as unknown as UserRow[]) ?? []);
+    const rows = (data.data as unknown as UserRow[]) ?? [];
+    setUsers(rows);
+    if (targetRole === 'ALL' && !targetSearch.trim() && targetStatus === 'ALL') setBaseline(rows);
   }
 
   async function handleToggleActive(user: UserRow) {
@@ -94,7 +148,10 @@ export function AdminUsersDashboard({ initialUsers }: AdminUsersDashboardProps) 
       return setError(errorMessage(apiErr, 'Failed to update account status'));
     }
 
-    setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, isActive: nextState } : u)));
+    const toggle = (prev: UserRow[]) =>
+      prev.map((u) => (u.id === user.id ? { ...u, isActive: nextState } : u));
+    setUsers(toggle);
+    setBaseline(toggle);
   }
 
   async function handleRoleChange(user: UserRow, newRole: Role) {
@@ -115,7 +172,10 @@ export function AdminUsersDashboard({ initialUsers }: AdminUsersDashboardProps) 
       return setError(errorMessage(apiErr, 'Failed to update role'));
     }
 
-    setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, role: newRole } : u)));
+    const change = (prev: UserRow[]) =>
+      prev.map((u) => (u.id === user.id ? { ...u, role: newRole } : u));
+    setUsers(change);
+    setBaseline(change);
   }
 
   function handleSearchSubmit(e: React.FormEvent) {
@@ -127,73 +187,63 @@ export function AdminUsersDashboard({ initialUsers }: AdminUsersDashboardProps) 
     {
       header: 'User',
       cell: (u) => (
-        <div>
-          <div className="font-medium text-ink">{u.name}</div>
-          <div className="text-xs text-muted">{u.email}</div>
+        <div className="flex items-center gap-3">
+          <Avatar name={u.name} size="sm" />
+          <div className="min-w-0">
+            <div className="truncate font-medium text-ink">{u.name}</div>
+            <div className="truncate text-xs text-muted">{u.email}</div>
+          </div>
         </div>
       ),
     },
     {
       header: 'Role',
-      cell: (u) => (
-        <span
-          className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${ROLE_BADGE_STYLES[u.role]}`}
-        >
-          {u.role}
-        </span>
-      ),
+      cell: (u) => <Badge tone={ROLE_TONE[u.role]}>{ROLE_LABEL[u.role]}</Badge>,
     },
     {
       header: 'Phone',
-      cell: (u) => <span className="text-xs text-muted">{u.phone ?? '—'}</span>,
+      cell: (u) => <span className="text-xs text-muted tabular-nums">{u.phone ?? '—'}</span>,
     },
     {
       header: 'Status',
       cell: (u) => (
-        <span
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-            u.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'
-          }`}
-        >
+        <Badge tone={u.isActive ? 'success' : 'danger'} dot>
           {u.isActive ? 'Active' : 'Disabled'}
-        </span>
+        </Badge>
       ),
     },
     {
       header: 'Joined',
-      cell: (u) => (
-        <span className="text-xs text-muted">
-          {new Date(u.createdAt).toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-          })}
-        </span>
-      ),
+      cell: (u) => <span className="text-xs text-muted">{formatDate(u.createdAt)}</span>,
     },
     {
       header: 'Actions',
+      headerClassName: 'text-right',
       className: 'px-4 py-3 text-right',
       cell: (u) => (
         <div className="flex items-center justify-end gap-2">
-          <select
-            value={u.role}
-            disabled={updatingId === u.id}
-            onChange={(e) => handleRoleChange(u, e.target.value as Role)}
-            className="rounded border border-line bg-surface px-2 py-1 text-xs text-ink hover:bg-canvas"
-          >
-            <option value="CUSTOMER">Customer</option>
-            <option value="COURIER">Courier</option>
-            <option value="DISPATCHER">Dispatcher</option>
-            <option value="MERCHANT">Merchant</option>
-            <option value="ADMIN">Admin</option>
-          </select>
+          <div className="w-32">
+            <Select
+              aria-label={`Role for ${u.name}`}
+              value={u.role}
+              disabled={updatingId === u.id}
+              onChange={(e) => handleRoleChange(u, e.target.value as Role)}
+              className="py-1 text-xs"
+            >
+              <option value="CUSTOMER">Customer</option>
+              <option value="COURIER">Courier</option>
+              <option value="DISPATCHER">Dispatcher</option>
+              <option value="MERCHANT">Merchant</option>
+              <option value="ADMIN">Admin</option>
+            </Select>
+          </div>
 
           <Button
             variant={u.isActive ? 'secondary' : 'primary'}
+            size="sm"
             disabled={updatingId === u.id}
             onClick={() => handleToggleActive(u)}
-            className="px-2.5 py-1 text-xs"
+            className="w-24"
           >
             {updatingId === u.id ? '…' : u.isActive ? 'Deactivate' : 'Activate'}
           </Button>
@@ -202,80 +252,161 @@ export function AdminUsersDashboard({ initialUsers }: AdminUsersDashboardProps) 
     },
   ];
 
+  const activeCount = baseline.filter((u) => u.isActive).length;
+  const staffCount = baseline.filter((u) => STAFF_ROLES.includes(u.role)).length;
+  const customerCount = baseline.filter((u) => u.role === 'CUSTOMER').length;
+  const merchantCount = baseline.filter((u) => u.role === 'MERCHANT').length;
+  const sampled = baseline.length < initialTotal;
+
   return (
     <div className="space-y-6">
-      {error && <Alert tone="error">{error}</Alert>}
-
-      {/* Top Controls: Filter Pills, Search Bar, Create Staff Button */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        {/* Role Filter Tabs */}
-        <div className="flex flex-wrap gap-1.5">
-          {ROLES_LIST.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => {
-                setRoleFilter(tab.value);
-                loadUsers(tab.value, search);
-              }}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                roleFilter === tab.value
-                  ? 'bg-brand text-white shadow-xs'
-                  : 'bg-surface text-muted border border-line hover:bg-canvas hover:text-ink'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Search & Create Staff Button */}
-        <div className="flex items-center gap-2">
-          <form onSubmit={handleSearchSubmit} className="flex gap-1.5">
-            <Input
-              type="search"
-              placeholder="Search by name or email…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-48 sm:w-64 text-xs"
-            />
-            <Button type="submit" variant="secondary" className="px-3 py-1.5 text-xs">
-              Search
-            </Button>
-          </form>
-
-          <Button onClick={() => setModalOpen(true)} className="whitespace-nowrap text-xs">
-            + Create Staff
-          </Button>
-        </div>
-      </div>
-
-      {/* Data Table */}
-      {loading ? (
-        <Card className="py-12 text-center text-sm text-muted">Loading user accounts…</Card>
-      ) : (
-        <Table
-          columns={columns}
-          rows={users}
-          rowKey={(u) => u.id}
-          empty={
-            <EmptyState
-              title="No users found"
-              description={
-                search || roleFilter !== 'ALL'
-                  ? 'Try adjusting your search criteria or role filters.'
-                  : 'There are no user accounts registered in the system yet.'
-              }
-              action={
-                <Button variant="secondary" onClick={() => loadUsers('ALL', '')}>
-                  Reset Filters
-                </Button>
-              }
-            />
+      <StatGrid cols={4}>
+        <StatCard
+          label="Total users"
+          value={formatNumber(initialTotal)}
+          icon={<Users />}
+          tone="brand"
+          hint="All registered accounts"
+        />
+        <StatCard
+          label="Active accounts"
+          value={formatNumber(activeCount)}
+          icon={<UserCheck />}
+          tone="success"
+          hint={
+            baseline.length
+              ? `${Math.round((activeCount / baseline.length) * 100)}% of ${sampled ? 'loaded' : 'all'} accounts`
+              : undefined
           }
         />
-      )}
+        <StatCard
+          label="Staff"
+          value={formatNumber(staffCount)}
+          icon={<ShieldCheck />}
+          tone="violet"
+          hint="Admins, dispatchers & couriers"
+        />
+        <StatCard
+          label="Customers / Merchants"
+          value={`${formatNumber(customerCount)} / ${formatNumber(merchantCount)}`}
+          icon={<Store />}
+          tone="info"
+          hint={sampled ? `From the first ${baseline.length} accounts` : 'Self-service accounts'}
+        />
+      </StatGrid>
 
-      {/* Create Staff Modal */}
+      {error && <Alert tone="error">{error}</Alert>}
+
+      <Card flush>
+        <CardHeader
+          title="Accounts"
+          description="Search, filter by role, change roles and enable or disable access."
+          icon={<Users />}
+          actions={
+            <Button size="sm" onClick={() => setModalOpen(true)}>
+              <UserPlus className="h-4 w-4" aria-hidden="true" />
+              Create Staff
+            </Button>
+          }
+        />
+        <div className="border-b border-line px-5 py-3">
+          <Toolbar
+            end={
+              <form onSubmit={handleSearchSubmit} className="flex gap-2" role="search">
+                <div className="relative">
+                  <Search
+                    className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-subtle"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    type="search"
+                    aria-label="Search users"
+                    placeholder="Search by name or email…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-56 pl-9 sm:w-64"
+                  />
+                </div>
+                <Button type="submit" variant="secondary">
+                  Search
+                </Button>
+              </form>
+            }
+          >
+            <Tabs
+              label="Filter by role"
+              value={roleFilter}
+              onChange={(value) => {
+                const next = value as Role | 'ALL';
+                setRoleFilter(next);
+                loadUsers(next, search);
+              }}
+              items={ROLES_LIST.map((tab) => ({
+                value: tab.value,
+                label: tab.label,
+                count: !sampled
+                  ? tab.value === 'ALL'
+                    ? baseline.length
+                    : baseline.filter((u) => u.role === tab.value).length
+                  : undefined,
+              }))}
+            />
+            <Tabs
+              label="Filter by status"
+              value={statusFilter}
+              onChange={(value) => {
+                const next = value as StatusFilter;
+                setStatusFilter(next);
+                loadUsers(roleFilter, search, next);
+              }}
+              items={STATUS_TABS}
+            />
+          </Toolbar>
+        </div>
+
+        {loading ? (
+          <div className="space-y-3 p-5" aria-busy="true" aria-label="Loading user accounts">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : (
+          <Table
+            bare
+            columns={columns}
+            rows={users}
+            rowKey={(u) => u.id}
+            caption="User accounts"
+            empty={
+              <div className="p-5">
+                <EmptyState
+                  compact
+                  title="No users found"
+                  description={
+                    search || roleFilter !== 'ALL' || statusFilter !== 'ALL'
+                      ? 'Try adjusting your search criteria or filters.'
+                      : 'There are no user accounts registered in the system yet.'
+                  }
+                  action={
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setRoleFilter('ALL');
+                        setStatusFilter('ALL');
+                        setSearch('');
+                        loadUsers('ALL', '', 'ALL');
+                      }}
+                    >
+                      Reset Filters
+                    </Button>
+                  }
+                />
+              </div>
+            }
+          />
+        )}
+      </Card>
+
       <CreateStaffModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}

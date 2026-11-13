@@ -1,0 +1,39 @@
+{{- if .Values.mailpit.enabled }}
+{{- $name := include "swiftdrop.host" (list . "mailpit") }}
+# Mailpit catches the notification emails (demo stand-in for a real SMTP relay).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "swiftdrop.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mailpit
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {{- include "swiftdrop.selector" (list . "mailpit") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "swiftdrop.selector" (list . "mailpit") | nindent 8 }}
+    spec:
+      containers:
+        - name: mailpit
+          image: {{ .Values.mailpit.image }}
+          ports:
+            - { name: smtp, containerPort: 1025 }
+            - { name: ui, containerPort: 8025 }
+          readinessProbe:
+            tcpSocket: { port: smtp }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "swiftdrop.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "swiftdrop.selector" (list . "mailpit") | nindent 4 }}
+  ports:
+    - { name: smtp, port: 1025, targetPort: smtp }
+    - { name: ui, port: 8025, targetPort: ui }
+{{- end }}

@@ -266,6 +266,68 @@ describe('Partner API Engine (/api/v1/merchant/*) — Task Group 3 (integration)
       expect(res.body.trackingNumber).toBe(trackingParcelA);
     });
 
+    it('creates a new parcel (201) for the key owner: CREATED, priced by the server, with history and event', async () => {
+      const merchantReference = `ORDER-NEW-${runId}`;
+      const order = {
+        merchantReference,
+        senderName: 'Merchant A',
+        senderPhone: '+94771111111',
+        pickupAddress: '10 Galle Road',
+        pickupCity: 'colombo',
+        recipientName: 'Customer One',
+        recipientPhone: '+94772222222',
+        dropoffAddress: '20 Kandy Road',
+        dropoffCity: 'kandy',
+        size: 'SMALL',
+        weightKg: 1.0,
+      };
+
+      const res = await request(t.http)
+        .post('/api/v1/merchant/parcels')
+        .set(MERCHANT_API_KEY_HEADER, rawKeyA)
+        .send(order)
+        .expect(201);
+
+      expect(res.body).toMatchObject({ status: 'CREATED', size: 'SMALL', currency: 'LKR' });
+      expect(res.body.trackingNumber).toMatch(/^SD\d{9}$/);
+      expect(res.body.feeCents).toBeGreaterThan(0);
+      // Public response shape: no internal ids that identify the merchant account.
+      expect(res.body.merchantId).toBeUndefined();
+
+      // Stored under the merchant that owns the key, as a partner-API parcel.
+      const stored = await t.prisma.parcel.findUniqueOrThrow({
+        where: { trackingNumber: res.body.trackingNumber },
+        include: { statusHistory: true },
+      });
+      expect(stored).toMatchObject({
+        merchantId: merchantAId,
+        merchantReference,
+        source: 'MERCHANT_API',
+        customerId: null,
+      });
+      expect(stored.statusHistory).toHaveLength(1);
+      expect(stored.statusHistory[0]).toMatchObject({ fromStatus: null, toStatus: 'CREATED' });
+      expect(
+        await t.prisma.outboxEvent.count({
+          where: {
+            eventType: 'parcel.created',
+            payload: { path: ['data', 'parcelId'], equals: stored.id },
+          },
+        }),
+      ).toBe(1);
+
+      // The same order again is idempotent: 200 and the same parcel, nothing new stored.
+      const again = await request(t.http)
+        .post('/api/v1/merchant/parcels')
+        .set(MERCHANT_API_KEY_HEADER, rawKeyA)
+        .send(order)
+        .expect(200);
+      expect(again.body.trackingNumber).toBe(res.body.trackingNumber);
+      expect(
+        await t.prisma.parcel.count({ where: { merchantId: merchantAId, merchantReference } }),
+      ).toBe(1);
+    });
+
     it('rejects requests containing a forged merchantId in the body with 400', async () => {
       await request(t.http)
         .post('/api/v1/merchant/parcels')

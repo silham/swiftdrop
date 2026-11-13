@@ -243,6 +243,81 @@ describe('Dispatch Module (Integration)', () => {
     });
   });
 
+  describe('GET /api/v1/dispatch/assignments', () => {
+    it('lists active assignments (newest first) and says which can still be unassigned', async () => {
+      const parcel = await createTestParcel();
+      const assignRes = await request(t.http)
+        .post('/api/v1/dispatch/assignments')
+        .set('Cookie', await t.cookieFor('DISPATCHER'))
+        .send({ parcelId: parcel.id, courierId: demoCourier.id })
+        .expect(201);
+
+      const res = await request(t.http)
+        .get('/api/v1/dispatch/assignments?pageSize=100')
+        .set('Cookie', await t.cookieFor('DISPATCHER'))
+        .expect(200);
+
+      expect(res.body.meta).toMatchObject({ page: 1, pageSize: 100, total: expect.any(Number) });
+      const mine = res.body.data.find((a: { id: string }) => a.id === assignRes.body.id);
+      expect(mine).toMatchObject({
+        parcelId: parcel.id,
+        trackingNumber: parcel.trackingNumber,
+        parcelStatus: 'CREATED',
+        courierId: demoCourier.id,
+        courierName: demoCourier.name,
+        canUnassign: true,
+      });
+      // No recipient details leak into the dispatch list.
+      expect(JSON.stringify(res.body)).not.toContain('recipient');
+
+      // Newest first
+      const times = res.body.data.map((a: { assignedAt: string }) => Date.parse(a.assignedAt));
+      expect([...times].sort((a, b) => b - a)).toEqual(times);
+    });
+
+    it('stops listing an assignment once it is cancelled, and flags parcels on the road', async () => {
+      const parcel = await createTestParcel();
+      const assignRes = await request(t.http)
+        .post('/api/v1/dispatch/assignments')
+        .set('Cookie', await t.cookieFor('ADMIN'))
+        .send({ parcelId: parcel.id, courierId: demoCourier.id })
+        .expect(201);
+
+      // Move it to IN_TRANSIT behind the scenes: it can no longer be handed back.
+      await t.prisma.parcel.update({ where: { id: parcel.id }, data: { status: 'IN_TRANSIT' } });
+      const onRoad = await request(t.http)
+        .get('/api/v1/dispatch/assignments?pageSize=100')
+        .set('Cookie', await t.cookieFor('DISPATCHER'))
+        .expect(200);
+      expect(
+        onRoad.body.data.find((a: { id: string }) => a.id === assignRes.body.id),
+      ).toMatchObject({ parcelStatus: 'IN_TRANSIT', canUnassign: false });
+
+      await t.prisma.parcel.update({ where: { id: parcel.id }, data: { status: 'CREATED' } });
+      await request(t.http)
+        .delete(`/api/v1/dispatch/assignments/${assignRes.body.id}`)
+        .set('Cookie', await t.cookieFor('DISPATCHER'))
+        .expect(200);
+      const after = await request(t.http)
+        .get('/api/v1/dispatch/assignments?pageSize=100')
+        .set('Cookie', await t.cookieFor('DISPATCHER'))
+        .expect(200);
+      expect(
+        after.body.data.find((a: { id: string }) => a.id === assignRes.body.id),
+      ).toBeUndefined();
+    });
+
+    it('requires a session (401) and only allows DISPATCHER and ADMIN (403 otherwise)', async () => {
+      await request(t.http).get('/api/v1/dispatch/assignments').expect(401);
+      for (const role of ['CUSTOMER', 'COURIER', 'MERCHANT'] as const) {
+        await request(t.http)
+          .get('/api/v1/dispatch/assignments')
+          .set('Cookie', await t.cookieFor(role))
+          .expect(403);
+      }
+    });
+  });
+
   describe('GET /api/v1/dispatch/couriers/workload', () => {
     it('returns courier workload with capacity statistics', async () => {
       const res = await request(t.http)

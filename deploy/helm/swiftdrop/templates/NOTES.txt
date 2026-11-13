@@ -1,0 +1,14 @@
+SwiftDrop is deploying to namespace {{ .Release.Namespace }}.
+
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }} -w
+
+{{- if .Values.ingress.enabled }}
+Open {{ .Values.appUrl }} (Ingress host {{ .Values.ingress.host }}, class {{ .Values.ingress.className }}).
+{{- else }}
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "swiftdrop.host" (list . "web") }} 3000
+{{- end }}
+MCP endpoint for Claude / ChatGPT: {{ trimSuffix "/" .Values.appUrl }}/mcp
+Captured emails: kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "swiftdrop.host" (list . "mailpit") }} 8025
+{{- if .Values.seed.enabled }}
+Demo accounts (password Password123!): customer@swiftdrop.test, dispatcher@swiftdrop.test, courier1@swiftdrop.test, merchant@swiftdrop.test, admin@swiftdrop.test
+{{- end }}

@@ -11,6 +11,7 @@ export default async function AdminZonesPage() {
     <>
       <PageHeader
         title="Delivery Zones"
+        eyebrow="Configuration"
         description="Configure geographical service areas and the cities serviced by each zone."
       />
       <ZonesManagement />

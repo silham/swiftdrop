@@ -1,12 +1,20 @@
 import { expect, test } from '@playwright/test';
 
 /** Smoke: the stack is up, routing works, dev login + role redirects work. */
-test('landing page loads and tracking form navigates', async ({ page }) => {
+test('landing page loads and links to tracking', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('parcel delivery');
+  await page.getByRole('link', { name: 'Track a parcel' }).first().click();
+  await expect(page).toHaveURL(/\/track$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Track your parcel');
+});
+
+test('tracking search navigates to the result page', async ({ page }) => {
+  await page.goto('/track');
   await page.getByLabel('Tracking number').fill('sd100000002');
   await page.getByRole('button', { name: 'Track' }).click();
   await expect(page).toHaveURL(/\/track\/SD100000002$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tracking SD100000002');
 });
 
 test('API health is reachable through the gateway', async ({ request }) => {

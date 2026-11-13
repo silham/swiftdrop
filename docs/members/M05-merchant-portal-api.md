@@ -21,7 +21,7 @@ You also own the merchant dashboard, API-key lifecycle, webhook configuration an
 
 - API: `apps/api/src/modules/merchants/` (portal + admin approval), `apps/api/src/modules/merchant-api/` (partner API, `ApiKeyGuard`), `apps/api/test/merchants/`
 - `packages/db/prisma/schema/merchant.prisma`, `packages/db/seed/20-merchants.ts`
-- Web: `src/app/merchant/**`, `src/app/(public)/merchant-signup/`, `src/app/admin/merchants/`, `src/features/merchant/`
+- Web: `src/app/merchant/**`, `src/app/(auth)/merchant-signup/`, `src/app/admin/merchants/`, `src/features/merchant/`
 - Docs: `docs/partner-api.md` (create it; partner-facing guide)
 
 ## Interfaces you provide
@@ -167,3 +167,11 @@ deliveries live. M8 may add a `webhook-echo` dev service.
   created twice), because `ParcelsService.create` returns the existing parcel without saying so.
   Webhook attempts are capped at 50 instead of paginated. No `@Throttle` on registration or the
   partner API yet. `UsersService.createUserInTransaction` was added in M2's file; M2 to review.
+- **Follow-ups closed (P1 pass):** webhook endpoint create/update/delete are audited (`webhook.created`,
+  `webhook.updated`, `webhook.deleted`; metadata is the URL host only), and these audit entries, the
+  secret rotation and the API key create/revoke entries are written in the same transaction as the
+  change. `GET /merchants/me/webhooks/:id/attempts` is paged without changing its response: optional
+  `page` and `pageSize` (default 50 per page), total in the `X-Total-Count` header; the UI has "Load
+  more". `POST /merchants/register` is limited to 10 per minute and the partner API to 120 per minute
+  per client. A test now covers creating a new parcel through the partner API (201). Still open: two
+  truly simultaneous duplicate orders both get 201.

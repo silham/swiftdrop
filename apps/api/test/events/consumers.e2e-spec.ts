@@ -441,7 +441,13 @@ describe('event consumers', () => {
 
       // outbox → relay → RabbitMQ (read back from a temp queue bound to parcel.#)
       const relay = new worker.OutboxRelayService(config, prisma, rabbit);
-      await relay.relayOnce();
+      // Other suites share this table and a batch is 50 rows, oldest first, so keep relaying until
+      // our own event has been published.
+      await until(async () => {
+        await relay.relayOnce();
+        const row = await prisma.outboxEvent.findUnique({ where: { id: event.eventId } });
+        return row?.publishedAt != null;
+      });
       const found: { body?: unknown } = {};
       await until(async () => {
         for (

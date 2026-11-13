@@ -26,7 +26,7 @@ export function RetryButton({ attemptId }: { attemptId: string }) {
 
   return (
     <div className="flex flex-col items-start gap-1">
-      <Button variant="secondary" onClick={retry} disabled={pending} className="px-3 py-1">
+      <Button variant="secondary" size="sm" onClick={retry} disabled={pending}>
         {pending ? 'Queuing…' : 'Retry'}
       </Button>
       {message && (

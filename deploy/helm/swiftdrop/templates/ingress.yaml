@@ -1,0 +1,39 @@
+{{- if .Values.ingress.enabled }}
+# One public origin, like the Caddy gateway in Docker Compose: same-site cookies, no CORS.
+# /api, /mcp and the OAuth discovery documents go to the API; everything else to the web app.
+# SSE (live tracking) needs an un-buffered proxy; Traefik streams by default (for ingress-nginx add
+# nginx.ingress.kubernetes.io/proxy-buffering: "off" and a long proxy-read-timeout).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "swiftdrop.fullname" . }}
+  labels: {{- include "swiftdrop.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          {{- range $path, $type := dict "/api" "Prefix" "/mcp" "Exact" "/.well-known" "Prefix" }}
+          - path: {{ $path }}
+            pathType: {{ $type }}
+            backend:
+              service:
+                name: {{ include "swiftdrop.host" (list $ "api") }}
+                port: { name: http }
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "swiftdrop.host" (list . "web") }}
+                port: { name: http }
+{{- end }}

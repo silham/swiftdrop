@@ -1,19 +1,34 @@
 'use client';
 
+import { ArrowRight, CircleCheck, Gauge, Inbox, Package, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   Alert,
+  Avatar,
   Button,
+  Card,
+  CardFooter,
+  CardHeader,
   EmptyState,
+  Pagination,
+  ProgressBar,
   Select,
+  Skeleton,
+  StatCard,
+  StatGrid,
   StatusBadge,
   Table,
+  Toolbar,
   type Column,
 } from '@/components/ui';
 import { api } from '@/lib/api/client';
 import { errorMessage } from '@/lib/api/errors';
+import { formatMoney, formatRelative } from '@/lib/format';
 import type { ParcelSize, ParcelStatus } from '@swiftdrop/contracts';
+import { ActiveAssignments } from './ActiveAssignments';
 import { AssignCourierModal, type AssignableParcel } from './AssignCourierModal';
+import { hasCapacity, summariseFleet, useCourierWorkload, utilisationPct } from './workload';
 
 export interface UnassignedParcelRow {
   id: string;
@@ -36,6 +51,9 @@ interface ZoneOption {
   code: string;
 }
 
+const PAGE_SIZE = 20;
+
+/** Owner: M7. Dispatch dashboard: fleet KPIs, unassigned queue and available couriers. */
 export function UnassignedQueue() {
   const [parcels, setParcels] = useState<UnassignedParcelRow[]>([]);
   const [zones, setZones] = useState<ZoneOption[]>([]);
@@ -45,6 +63,10 @@ export function UnassignedQueue() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [assignTarget, setAssignTarget] = useState<AssignableParcel | null>(null);
+  // Bumped whenever an assignment is made or cancelled, so the assignments card reloads.
+  const [assignmentsKey, setAssignmentsKey] = useState(0);
+  const workload = useCourierWorkload();
+  const fleet = summariseFleet(workload.couriers);
 
   // Load available zones for filtering
   useEffect(() => {
@@ -68,7 +90,7 @@ export function UnassignedQueue() {
   async function fetchParcels(targetZone = selectedZoneId, targetPage = page) {
     const query: { page: number; pageSize: number; zoneId?: string } = {
       page: targetPage,
-      pageSize: 20,
+      pageSize: PAGE_SIZE,
     };
     if (targetZone) query.zoneId = targetZone;
 
@@ -98,22 +120,40 @@ export function UnassignedQueue() {
     setPage(1);
   }
 
+  function handlePageChange(next: number) {
+    setLoading(true);
+    setPage(next);
+  }
+
+  function refreshAll() {
+    void loadParcels();
+    workload.reload();
+    setAssignmentsKey((k) => k + 1);
+  }
+
   const columns: Column<UnassignedParcelRow>[] = [
     {
-      header: 'Tracking Number',
-      cell: (p) => <span className="font-mono font-medium text-ink">{p.trackingNumber}</span>,
+      header: 'Parcel',
+      cell: (p) => (
+        <div className="whitespace-nowrap">
+          <span className="font-mono text-[13px] font-medium text-ink">{p.trackingNumber}</span>
+          <span className="block text-xs text-muted">
+            {p.size} &middot; {p.weightKg} kg
+          </span>
+        </div>
+      ),
     },
     {
       header: 'Status',
       cell: (p) => <StatusBadge status={p.status} />,
     },
     {
-      header: 'Route (Pickup → Dropoff)',
+      header: 'Route',
       cell: (p) => (
-        <div>
-          <span className="font-medium capitalize">{p.pickupCity}</span>
-          <span className="text-muted mx-1">→</span>
-          <span className="font-medium capitalize">{p.dropoffCity}</span>
+        <div className="whitespace-nowrap">
+          <span className="font-medium text-ink capitalize">{p.pickupCity}</span>
+          <ArrowRight className="mx-1 inline h-3 w-3 text-subtle" aria-label="to" />
+          <span className="font-medium text-ink capitalize">{p.dropoffCity}</span>
           {p.pickupZoneName && (
             <span className="block text-xs text-muted">Zone: {p.pickupZoneName}</span>
           )}
@@ -121,105 +161,243 @@ export function UnassignedQueue() {
       ),
     },
     {
-      header: 'Size & Weight',
-      cell: (p) => (
-        <span className="text-muted">
-          {p.size} &middot; {p.weightKg} kg
-        </span>
-      ),
-    },
-    {
       header: 'Fee',
+      headerClassName: 'text-right',
+      className: 'px-4 py-3 text-right whitespace-nowrap',
       cell: (p) => (
-        <span className="font-medium">
-          {p.currency} {(p.feeCents / 100).toFixed(2)}
+        <span className="font-medium text-ink tabular-nums">
+          {formatMoney(p.feeCents, p.currency)}
         </span>
       ),
     },
     {
-      header: 'Booked At',
+      header: 'Age',
       cell: (p) => (
-        <span className="text-muted text-xs">
-          {new Date(p.createdAt).toLocaleDateString()}{' '}
-          {new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </span>
+        <time
+          dateTime={p.createdAt}
+          title={new Date(p.createdAt).toLocaleString()}
+          className="text-xs whitespace-nowrap text-muted"
+        >
+          {formatRelative(p.createdAt)}
+        </time>
       ),
     },
     {
       header: 'Action',
+      headerClassName: 'text-right',
+      className: 'px-4 py-3 text-right whitespace-nowrap',
       cell: (p) => (
-        <Button
-          variant="secondary"
-          className="text-xs py-1 px-3"
-          onClick={() => setAssignTarget(p)}
-        >
+        <Button variant="secondary" size="sm" onClick={() => setAssignTarget(p)}>
           Assign Courier
         </Button>
       ),
     },
   ];
 
+  const available = workload.couriers
+    .filter(hasCapacity)
+    .sort((a, b) => utilisationPct(a) - utilisationPct(b));
+  const workloadLoading = workload.loading && workload.couriers.length === 0;
+
   return (
-    <div className="space-y-4">
-      {error && <Alert tone="error">{error}</Alert>}
+    <div className="space-y-6">
+      <StatGrid>
+        <StatCard
+          label="Unassigned"
+          value={total}
+          icon={<Inbox />}
+          tone={total > 0 ? 'warning' : 'success'}
+          loading={loading && parcels.length === 0 && total === 0}
+          hint={selectedZoneId ? 'In the selected zone' : 'Awaiting a courier'}
+        />
+        <StatCard
+          label="Available couriers"
+          value={fleet.available}
+          icon={<CircleCheck />}
+          tone="success"
+          loading={workloadLoading}
+          hint={`of ${fleet.total} in the fleet`}
+          href="/dispatch/couriers"
+        />
+        <StatCard
+          label="Active deliveries"
+          value={fleet.active}
+          icon={<Package />}
+          tone="brand"
+          loading={workloadLoading}
+          hint={`${fleet.capacity} slots total`}
+        />
+        <StatCard
+          label="Fleet utilisation"
+          value={`${fleet.utilisation}%`}
+          icon={<Gauge />}
+          tone={fleet.utilisation > 90 ? 'danger' : fleet.utilisation > 60 ? 'warning' : 'violet'}
+          loading={workloadLoading}
+          hint="Active parcels ÷ capacity"
+        />
+      </StatGrid>
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-surface p-4 rounded-lg border border-line">
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <label htmlFor="zone-filter" className="text-sm font-medium text-muted whitespace-nowrap">
-            Filter by Zone:
-          </label>
-          <Select
-            id="zone-filter"
-            value={selectedZoneId}
-            onChange={(e) => handleZoneChange(e.target.value)}
-            className="w-full sm:w-56 text-sm"
-          >
-            <option value="">All Serviced Zones</option>
-            {zones.map((z) => (
-              <option key={z.id} value={z.id}>
-                {z.name} ({z.code})
-              </option>
-            ))}
-          </Select>
-        </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <Card flush className="min-w-0">
+          <CardHeader
+            title="Assignment queue"
+            description={`${total} parcel${total === 1 ? '' : 's'} awaiting courier assignment`}
+          />
+          <div className="border-b border-line px-5 py-3">
+            <Toolbar
+              end={
+                <Button variant="secondary" size="sm" onClick={refreshAll} disabled={loading}>
+                  <RefreshCw
+                    className={loading ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'}
+                    aria-hidden="true"
+                  />
+                  {loading ? 'Refreshing...' : 'Refresh'}
+                </Button>
+              }
+            >
+              <label
+                htmlFor="zone-filter"
+                className="text-sm font-medium whitespace-nowrap text-muted"
+              >
+                Filter by Zone:
+              </label>
+              <Select
+                id="zone-filter"
+                value={selectedZoneId}
+                onChange={(e) => handleZoneChange(e.target.value)}
+                className="w-full text-sm sm:w-56"
+              >
+                <option value="">All Serviced Zones</option>
+                {zones.map((z) => (
+                  <option key={z.id} value={z.id}>
+                    {z.name} ({z.code})
+                  </option>
+                ))}
+              </Select>
+            </Toolbar>
+          </div>
 
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted">
-            {total} parcel{total === 1 ? '' : 's'} awaiting courier assignment
-          </span>
-          <Button
-            variant="ghost"
-            className="text-xs py-1 px-2"
-            onClick={() => loadParcels()}
-            disabled={loading}
-          >
-            {loading ? 'Refreshing...' : 'Refresh'}
-          </Button>
-        </div>
+          {error && (
+            <div className="px-5 pt-4">
+              <Alert tone="error">{error}</Alert>
+            </div>
+          )}
+
+          {loading && parcels.length === 0 ? (
+            <div className="space-y-3 p-5" aria-busy="true" aria-label="Loading">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : (
+            <Table
+              bare
+              columns={columns}
+              rows={parcels}
+              rowKey={(p) => p.id}
+              caption="Assignment queue"
+              empty={
+                <div className="p-5">
+                  <EmptyState
+                    compact
+                    className="border-0"
+                    icon={<CircleCheck />}
+                    title="No unassigned parcels"
+                    description={
+                      selectedZoneId
+                        ? 'There are currently no parcels in the selected zone awaiting assignment.'
+                        : 'All booked parcels have been assigned to couriers!'
+                    }
+                  />
+                </div>
+              }
+            />
+          )}
+
+          {total > PAGE_SIZE && (
+            <CardFooter>
+              <Pagination
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={total}
+                onPageChange={handlePageChange}
+                className="w-full"
+              />
+            </CardFooter>
+          )}
+        </Card>
+
+        <Card flush className="flex flex-col self-start">
+          <CardHeader
+            title="Couriers available now"
+            description="Online couriers with free capacity, least busy first."
+          />
+          <div className="flex-1 p-5">
+            {workload.error ? (
+              <Alert tone="error">{workload.error}</Alert>
+            ) : workloadLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : available.length === 0 ? (
+              <EmptyState
+                compact
+                className="border-0"
+                title="No couriers free"
+                description="Every courier is offline or at full capacity."
+              />
+            ) : (
+              <ul className="space-y-4">
+                {available.slice(0, 6).map((c) => {
+                  const pct = utilisationPct(c);
+                  return (
+                    <li key={c.courierId} className="flex items-center gap-3">
+                      <Avatar name={c.name} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-sm font-medium text-ink">{c.name}</span>
+                          <span className="shrink-0 text-xs text-muted tabular-nums">
+                            {c.activeParcels}/{c.maxActiveParcels}
+                          </span>
+                        </div>
+                        <ProgressBar
+                          value={pct}
+                          tone="auto"
+                          size="sm"
+                          label={`${c.name} capacity`}
+                          className="mt-1.5"
+                        />
+                        <p className="mt-1 truncate text-xs text-muted">
+                          {c.zoneName ?? 'Unassigned zone'}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          <CardFooter>
+            <Link
+              href="/dispatch/couriers"
+              className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
+            >
+              View courier workload <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </CardFooter>
+        </Card>
       </div>
 
-      <Table
-        columns={columns}
-        rows={parcels}
-        rowKey={(p) => p.id}
-        empty={
-          <EmptyState
-            title="No unassigned parcels"
-            description={
-              selectedZoneId
-                ? 'There are currently no parcels in the selected zone awaiting assignment.'
-                : 'All booked parcels have been assigned to couriers!'
-            }
-          />
-        }
-      />
+      <ActiveAssignments refreshKey={assignmentsKey} onChanged={refreshAll} />
 
       {assignTarget && (
         <AssignCourierModal
           key={assignTarget?.id ?? 'none'}
           parcel={assignTarget}
           onClose={() => setAssignTarget(null)}
-          onAssigned={() => loadParcels()}
+          onAssigned={refreshAll}
         />
       )}
     </div>

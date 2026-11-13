@@ -58,13 +58,14 @@ make down            # stop (data is kept)
 ## Repository layout
 
 ```
-apps/api        NestJS API (modules: auth, users, bookings, parcels, pricing, dispatch, courier, merchants, merchant-api, reports, audit, event-ops)
+apps/api        NestJS API (modules: auth, users, bookings, parcels, pricing, dispatch, courier, merchants, merchant-api, reports, audit, event-ops, ai-tools, oauth, mcp, assistant)
 apps/worker     outbox relay + notification and webhook consumers
 apps/web        Next.js portals: customer, merchant, courier, dispatch, admin
 apps/e2e        Playwright tests
 packages/contracts  shared enums, status graph, event schemas, error codes
 packages/db     Prisma schema (split per module), migrations, seed
 docker/         Dockerfile (dev + prod targets), Caddy gateway, Postgres init
+deploy/helm/    Helm chart for Kubernetes
 docs/           architecture, ADRs, conventions, contracts, member briefs
 ```
 
@@ -77,10 +78,55 @@ docs/           architecture, ADRs, conventions, contracts, member briefs
 - [docs/contracts/](docs/contracts/): parcel lifecycle, authorization matrix, event catalog, endpoint list
 - [docs/members/](docs/members/): one brief per team member
 - [docs/TEAM.md](docs/TEAM.md): who is who
+- [docs/report/](docs/report/): test report, demo script, use cases, activity diagrams, contribution sheet
+- [docs/release-checklist.md](docs/release-checklist.md): what to check before a demo or release
+- [docs/partner-api.md](docs/partner-api.md) and [docs/security-review.md](docs/security-review.md)
+- [docs/deploy/kubernetes.md](docs/deploy/kubernetes.md) (Helm chart) and
+  [docs/deploy/coolify.md](docs/deploy/coolify.md) (HTTPS hosting, connecting Claude and ChatGPT)
+
+## AI assistant and MCP server
+
+- **Tracking page chatbot.** "Ask SwiftDrop" on `/track` answers "Where is my parcel?" and "How much
+  to send 2 kg to Kandy?" with live data.
+  - It works with any OpenAI-compatible model. Set `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` in
+    `.env`; `.env.example` has presets for OpenAI, DeepSeek and Gemini. Then run `make restart s=api`.
+  - Without a key it says it is switched off.
+- **MCP server for Claude and ChatGPT** at `<APP_URL>/mcp` (Streamable HTTP).
+  - Users connect with OAuth 2.1 (PKCE and dynamic client registration). SwiftDrop is the
+    authorization server and shows its own consent screen.
+  - The tools depend on the signed-in role: track and estimate for everyone, own parcels and booking
+    for customers, orders for merchants, deliveries for couriers, queue, workload, assignment and
+    reports for dispatchers.
+  - Claude and ChatGPT need HTTPS: see [docs/deploy/coolify.md](docs/deploy/coolify.md). The design
+    is in [ADR-0009](docs/architecture/adr/0009-mcp-oauth.md).
 
 ## Known limitations
 
-- The scaffold ships the business endpoints as documented stubs that return `501 NOT_IMPLEMENTED`
-  until their owner implements them.
-- Google OAuth needs real credentials in `.env`.
+- Google sign-in needs real credentials in `.env`; without them the button answers "not configured".
 - SMS is a mock provider that writes a log line. Email goes to Mailpit.
+- The seeded proof of delivery for `SD100000003` has no photo file (object storage isn't part of the
+  seed), so its photo view says "not available". Photos taken through the courier screens work.
+- The Helm chart is validated (`make k8s-lint`) but has not been smoke-tested on a live cluster.
+- AI apps that a user connected over MCP keep access until their tokens expire or are revoked; there
+  is no "connected apps" screen yet.
+- The `make e2e` suite needs the dev stack running and takes a few minutes, mostly page compilation.
+- `make prod-up` serves plain HTTP on localhost. Cookies are marked `Secure` there, which Safari
+  refuses over HTTP: run `PROD_COOKIE_SECURE=false make prod-up` for Safari, or put it behind HTTPS.
+
+## Troubleshooting
+
+| Problem                                                         | What to do                                                                                                                                                |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Cannot connect to the Docker daemon`                           | Start Docker Desktop, wait until it says it is running, then `make up`. Data is kept in volumes.                                                          |
+| Port already in use (8080, 5432, 5672, 15672, 8025, 9000, 9001) | Stop whatever uses it (`lsof -i :8080`) or stop the other project. `make down` stops this stack.                                                          |
+| `make up` is very slow or containers restart                    | Give Docker Desktop at least 4 GB RAM (Settings → Resources). The first start builds images and installs packages (3–5 minutes).                          |
+| The page shows an old version or a build error after `git pull` | `make install` (dependencies, shared packages), `make migrate-deploy` (new migrations), then `make restart`.                                              |
+| `make gen` or typecheck fails on `schema.d.ts`                  | The API types are generated: run `make gen` after any API change.                                                                                         |
+| Tests fail with a database error                                | The integration tests use their own `swiftdrop_test` database and reset it on every run. Make sure `make ps` shows postgres healthy and rabbitmq healthy. |
+| Integration tests behave oddly while the stack is running       | They talk to the same RabbitMQ as the dev stack. If an events test fails once, run `make test-int` again; a persistent failure is a real bug.             |
+| `git commit` fails with `pnpm: command not found` (husky hook)  | The editor's git can't see `pnpm`. Start VS Code from a terminal where `pnpm` works (`code .`), or add the folder containing `pnpm` to the hook's PATH.   |
+| Emails don't arrive                                             | Open Mailpit (http://localhost:8025). If it is empty, check the worker: `make logs s=worker`.                                                             |
+| Live tracking never says "Live"                                 | The browser falls back to polling every 15 seconds if the event stream can't connect. Check `make logs s=api` and that RabbitMQ is healthy.               |
+| Signed out right after login in the prod stack                  | Secure cookies over plain HTTP: see "Known limitations" (`PROD_COOKIE_SECURE=false`).                                                                     |
+| Dev login panel missing on `/login`                             | It only shows when `ENABLE_DEV_LOGIN=true` (default in `.env.example`) and never in production mode.                                                      |
+| I need a clean database                                         | Ask the team lead first: `make db-reset` and `make nuke` delete data and are never run by the coding agents.                                              |

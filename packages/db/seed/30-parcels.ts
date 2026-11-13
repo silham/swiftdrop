@@ -1,4 +1,6 @@
 // Owner: M4. A few demo parcels in different statuses, each with consistent status history.
+// SD100000002 is on the road with courier1 (ACTIVE assignment); SD100000003 was delivered by courier1
+// (COMPLETED assignment + a proof-of-delivery record, without a photo file in object storage).
 import type { ParcelStatus, PrismaClient } from '../src';
 
 const PATHS: Record<string, ParcelStatus[]> = {
@@ -35,7 +37,9 @@ export async function seedParcels(prisma: PrismaClient) {
         dropoffZoneId: kdy.id,
         size: 'SMALL',
         weightKg: 1.5,
-        feeCents: 52500,
+        // What the seeded pricing rules give for colombo → kandy, SMALL, 1.5 kg (55000, weight rounds up).
+        feeCents: 55000,
+        deliveryAttempts: path.filter((s) => s === 'OUT_FOR_DELIVERY').length,
         deliveredAt: status === 'DELIVERED' ? new Date() : null,
         statusHistory: {
           create: path.map((to, i) => ({
@@ -48,4 +52,58 @@ export async function seedParcels(prisma: PrismaClient) {
       },
     });
   }
+
+  await seedAssignments(prisma);
+}
+
+/** Courier work for the demo parcels. Safe to re-run: each step skips what already exists. */
+async function seedAssignments(prisma: PrismaClient) {
+  const courier = await prisma.user.findUniqueOrThrow({
+    where: { email: 'courier1@swiftdrop.test' },
+  });
+  const dispatcher = await prisma.user.findUniqueOrThrow({
+    where: { email: 'dispatcher@swiftdrop.test' },
+  });
+
+  const inTransit = await prisma.parcel.findUniqueOrThrow({
+    where: { trackingNumber: 'SD100000002' },
+  });
+  const delivered = await prisma.parcel.findUniqueOrThrow({
+    where: { trackingNumber: 'SD100000003' },
+  });
+
+  if (!(await prisma.courierAssignment.findFirst({ where: { parcelId: inTransit.id } }))) {
+    await prisma.courierAssignment.create({
+      data: {
+        parcelId: inTransit.id,
+        courierId: courier.id,
+        assignedById: dispatcher.id,
+        status: 'ACTIVE',
+      },
+    });
+  }
+
+  if (!(await prisma.courierAssignment.findFirst({ where: { parcelId: delivered.id } }))) {
+    await prisma.courierAssignment.create({
+      data: {
+        parcelId: delivered.id,
+        courierId: courier.id,
+        assignedById: dispatcher.id,
+        status: 'COMPLETED',
+        completedAt: delivered.deliveredAt ?? new Date(),
+      },
+    });
+  }
+
+  await prisma.proofOfDelivery.upsert({
+    where: { parcelId: delivered.id },
+    update: {},
+    create: {
+      parcelId: delivered.id,
+      courierId: courier.id,
+      recipientName: 'Test Recipient',
+      notes: 'seed',
+      // No photo: object storage is not part of the seed, so the photo view shows "not available".
+    },
+  });
 }

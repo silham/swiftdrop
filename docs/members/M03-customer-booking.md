@@ -132,3 +132,8 @@ Mobile-friendly. Use the `@/components/ui` kit. Validate on the client for UX, b
   web runner (e.g. vitest). `POST /parcels` and the estimate button only work end to end once M4's
   `ParcelsService.create` and M7's `PricingService.estimate` are on main. Live tracking on the
   detail page can use M4's `useLiveTracking` from `@/features/tracking` once PR #3 is merged.
+- **Live status (added):** the parcel detail header uses `LiveParcelStatus`, which follows the parcel
+  through M4's `useLiveTracking` (SSE, polling fallback) and calls `router.refresh()` when the status
+  changes so the timeline and proof photo update. M4, M7 and M6 are all on main now, so the proof
+  photo works. E2E: `apps/e2e/tests/customer-booking.spec.ts`. Still open: the booking integration
+  test mocks `ParcelsService.create`.

@@ -53,6 +53,11 @@ describe('GET /api/v1/parcels/:id', () => {
 
 ## Coverage
 
-`make coverage` writes `apps/api/coverage/{unit,integration}`. CI uploads coverage artifacts on
-every PR. Target at least 70 % lines on business services. The test report for submission is
-assembled by M10 in Week 7.
+`make coverage` runs the API unit and integration tests **in one Jest run** (`apps/api/jest.all.config.js`),
+writes one merged report to `apps/api/coverage/merged` (open `index.html`) and **fails if coverage
+drops below the thresholds** in that file (currently lines 88 %, statements 86 %, functions 87 %,
+branches 75 %, a few points under the measured values). CI runs the same command and uploads the
+report. Worker and contracts have their own unit coverage (`pnpm --filter @swiftdrop/worker test:cov`).
+The web unit tests (`pnpm --filter @swiftdrop/web test`) use Node's test runner through `tsx` and run
+in `make test` and CI. The measured numbers and the journeys covered are in
+[docs/report/test-report.md](../report/test-report.md).

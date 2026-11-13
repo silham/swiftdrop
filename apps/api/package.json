@@ -13,9 +13,11 @@
     "test:cov": "jest --coverage",
     "test:int": "jest -c test/jest-int.config.js --runInBand",
     "test:int:cov": "jest -c test/jest-int.config.js --runInBand --coverage",
+    "test:cov:all": "jest -c jest.all.config.js --runInBand --coverage",
     "openapi:export": "swc src -d .openapi/src --strip-leading-paths -q && swc scripts -d .openapi/scripts --strip-leading-paths -q && node .openapi/scripts/export-openapi.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@nestjs/common": "11.2.7",
     "@nestjs/core": "11.2.7",
     "@nestjs/jwt": "11.0.2",

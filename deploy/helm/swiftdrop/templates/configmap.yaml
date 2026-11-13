@@ -1,0 +1,25 @@
+# Non-secret configuration for api, worker and web (12-factor: config in the environment).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "swiftdrop.fullname" . }}-config
+  labels: {{- include "swiftdrop.labels" . | nindent 4 }}
+data:
+  NODE_ENV: production
+  APP_URL: {{ .Values.appUrl | quote }}
+  CORS_ORIGINS: {{ default .Values.appUrl .Values.corsOrigins | quote }}
+  GOOGLE_CALLBACK_URL: {{ printf "%s/api/v1/auth/google/callback" (trimSuffix "/" .Values.appUrl) | quote }}
+  ENABLE_DEV_LOGIN: 'false'
+  NEXT_PUBLIC_ENABLE_DEV_LOGIN: 'false'
+  NEXT_PUBLIC_API_BASE: /api/v1
+  API_INTERNAL_URL: {{ printf "http://%s:4000" (include "swiftdrop.host" (list . "api")) | quote }}
+  S3_ENDPOINT: {{ include "swiftdrop.host" (list . "storage") | quote }}
+  S3_PORT: '9000'
+  S3_USE_SSL: 'false'
+  S3_ACCESS_KEY: {{ .Values.storage.accessKey | quote }}
+  SMTP_HOST: {{ include "swiftdrop.host" (list . "mailpit") | quote }}
+  SMTP_PORT: '1025'
+  WORKER_HEALTH_PORT: '4100'
+  {{- range $key, $value := .Values.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

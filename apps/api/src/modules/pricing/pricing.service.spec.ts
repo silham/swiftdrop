@@ -37,6 +37,8 @@ describe('PricingService (Unit)', () => {
         create: jest.fn(),
         update: jest.fn(),
       },
+      // Writes and their audit entry run in one transaction; the mock is its own `tx`.
+      $transaction: jest.fn(async (cb: (tx: unknown) => unknown) => cb(prismaMock)),
     };
 
     auditMock = {
@@ -453,7 +455,67 @@ describe('PricingService (Unit)', () => {
           entityId: 'new-zone-id',
           actor: { id: 'admin-1', role: 'ADMIN' },
         }),
+        prismaMock, // same transaction as the write
       );
+    });
+
+    it('does not keep the change when its audit entry cannot be written', async () => {
+      prismaMock.deliveryZone.findUnique.mockResolvedValue(null);
+      prismaMock.deliveryZone.findMany.mockResolvedValue([]);
+      prismaMock.deliveryZone.create.mockResolvedValue({ id: 'z', cities: [] });
+      auditMock.record.mockRejectedValue(new Error('audit down'));
+
+      await expect(
+        service.createZone({ code: 'NEW', name: 'New Zone', cities: ['homagama'] }),
+      ).rejects.toThrow('audit down');
+      // the rejection propagates out of $transaction, which is what rolls the create back
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Rule validity window', () => {
+    const baseRule = { name: 'Rule', baseFeeCents: 1000, perKgCents: 100 };
+
+    it('rejects a new rule whose validFrom is after validTo (400)', async () => {
+      await expect(
+        service.createRule({
+          ...baseRule,
+          validFrom: '2030-02-01T00:00:00.000Z',
+          validTo: '2030-01-01T00:00:00.000Z',
+        } as never),
+      ).rejects.toMatchObject({ status: 400, code: 'VALIDATION_FAILED' });
+      expect(prismaMock.pricingRule.create).not.toHaveBeenCalled();
+    });
+
+    it('checks an update against the stored date when only one side changes', async () => {
+      prismaMock.pricingRule.findUnique.mockResolvedValue({
+        id: 'r1',
+        validFrom: new Date('2030-01-01T00:00:00.000Z'),
+        validTo: new Date('2030-06-01T00:00:00.000Z'),
+      });
+      await expect(
+        service.updateRule('r1', { validTo: '2029-12-01T00:00:00.000Z' } as never),
+      ).rejects.toMatchObject({ status: 400, code: 'VALIDATION_FAILED' });
+      expect(prismaMock.pricingRule.update).not.toHaveBeenCalled();
+    });
+
+    it('accepts open-ended and equal windows', async () => {
+      prismaMock.pricingRule.create.mockResolvedValue({
+        id: 'r2',
+        name: 'Rule',
+        fromZone: null,
+        toZone: null,
+      });
+      await expect(
+        service.createRule({ ...baseRule, validFrom: '2030-01-01T00:00:00.000Z' } as never),
+      ).resolves.toBeDefined();
+      await expect(
+        service.createRule({
+          ...baseRule,
+          validFrom: '2030-01-01T00:00:00.000Z',
+          validTo: '2030-01-01T00:00:00.000Z',
+        } as never),
+      ).resolves.toBeDefined();
     });
   });
 });

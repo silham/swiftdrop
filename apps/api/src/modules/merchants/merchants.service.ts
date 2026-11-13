@@ -11,6 +11,7 @@ import { PrismaService } from '../../infra/prisma';
 import { AuditService } from '../audit';
 import { UsersService } from '../users';
 import { encryptWebhookSecret } from './crypto';
+import { ListWebhookAttemptsQuery } from './dto/merchant.dto';
 import { isInternalHostname, resolvesToNonPublicIp } from './webhook-url';
 import type {
   ApiKeyDto,
@@ -225,21 +226,26 @@ export class MerchantsService {
     const rawKey = `${prefix}_${secretPart}`;
     const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
 
-    const apiKey = await this.prisma.apiKey.create({
-      data: {
-        merchantId: merchant.id,
-        name: dto.name.trim(),
-        prefix,
-        keyHash,
-      },
-    });
-
-    await this.audit.record({
-      actor: { id: user.id, role: user.role },
-      action: 'api_key.created',
-      entityType: 'ApiKey',
-      entityId: apiKey.id,
-      metadata: { name: apiKey.name, prefix: apiKey.prefix },
+    const apiKey = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.apiKey.create({
+        data: {
+          merchantId: merchant.id,
+          name: dto.name.trim(),
+          prefix,
+          keyHash,
+        },
+      });
+      await this.audit.record(
+        {
+          actor: { id: user.id, role: user.role },
+          action: 'api_key.created',
+          entityType: 'ApiKey',
+          entityId: created.id,
+          metadata: { name: created.name, prefix: created.prefix },
+        },
+        tx,
+      );
+      return created;
     });
 
     return {
@@ -257,17 +263,21 @@ export class MerchantsService {
 
     if (key.revokedAt) return;
 
-    await this.prisma.apiKey.update({
-      where: { id },
-      data: { revokedAt: new Date() },
-    });
-
-    await this.audit.record({
-      actor: { id: user.id, role: user.role },
-      action: 'api_key.revoked',
-      entityType: 'ApiKey',
-      entityId: id,
-      metadata: { prefix: key.prefix },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.apiKey.update({
+        where: { id },
+        data: { revokedAt: new Date() },
+      });
+      await this.audit.record(
+        {
+          actor: { id: user.id, role: user.role },
+          action: 'api_key.revoked',
+          entityType: 'ApiKey',
+          entityId: id,
+          metadata: { prefix: key.prefix },
+        },
+        tx,
+      );
     });
   }
 
@@ -288,15 +298,30 @@ export class MerchantsService {
     const rawSecret = crypto.randomBytes(32).toString('hex');
     const secretEncrypted = encryptWebhookSecret(rawSecret, this.config.WEBHOOK_SECRET_ENC_KEY);
 
-    const endpoint = await this.prisma.webhookEndpoint.create({
-      data: {
-        merchantId: merchant.id,
-        url: dto.url.trim(),
-        secretEncrypted,
-        eventTypes:
-          dto.eventTypes && dto.eventTypes.length > 0 ? dto.eventTypes : ['parcel.status_changed'],
-        isActive: true,
-      },
+    const eventTypes =
+      dto.eventTypes && dto.eventTypes.length > 0 ? dto.eventTypes : ['parcel.status_changed'];
+    const endpoint = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.webhookEndpoint.create({
+        data: {
+          merchantId: merchant.id,
+          url: dto.url.trim(),
+          secretEncrypted,
+          eventTypes,
+          isActive: true,
+        },
+      });
+      await this.audit.record(
+        {
+          actor: { id: user.id, role: user.role },
+          action: 'webhook.created',
+          entityType: 'WebhookEndpoint',
+          entityId: created.id,
+          // Host only: a URL can carry credentials or tokens in its path or query.
+          metadata: { host: urlHost(created.url), eventTypes },
+        },
+        tx,
+      );
+      return created;
     });
 
     return {
@@ -316,12 +341,25 @@ export class MerchantsService {
       await this.validateWebhookUrl(dto.url);
     }
 
-    const updated = await this.prisma.webhookEndpoint.update({
-      where: { id },
-      data: {
-        url: dto.url?.trim() ?? undefined,
-        isActive: dto.isActive !== undefined ? dto.isActive : undefined,
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.webhookEndpoint.update({
+        where: { id },
+        data: {
+          url: dto.url?.trim() ?? undefined,
+          isActive: dto.isActive !== undefined ? dto.isActive : undefined,
+        },
+      });
+      await this.audit.record(
+        {
+          actor: { id: user.id, role: user.role },
+          action: 'webhook.updated',
+          entityType: 'WebhookEndpoint',
+          entityId: id,
+          metadata: { host: urlHost(result.url), isActive: result.isActive },
+        },
+        tx,
+      );
+      return result;
     });
 
     return this.toWebhookDto(updated);
@@ -334,7 +372,19 @@ export class MerchantsService {
     });
     if (!existing) throw notFound('WebhookEndpoint');
 
-    await this.prisma.webhookEndpoint.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.webhookEndpoint.delete({ where: { id } });
+      await this.audit.record(
+        {
+          actor: { id: user.id, role: user.role },
+          action: 'webhook.deleted',
+          entityType: 'WebhookEndpoint',
+          entityId: id,
+          metadata: { host: urlHost(existing.url) },
+        },
+        tx,
+      );
+    });
   }
 
   async rotateWebhookSecret(user: AuthUser, id: string): Promise<WebhookWithSecretDto> {
@@ -347,19 +397,24 @@ export class MerchantsService {
     const newRawSecret = crypto.randomBytes(32).toString('hex');
     const newEncrypted = encryptWebhookSecret(newRawSecret, this.config.WEBHOOK_SECRET_ENC_KEY);
 
-    const updated = await this.prisma.webhookEndpoint.update({
-      where: { id },
-      data: {
-        secretEncrypted: newEncrypted,
-        previousSecretEncrypted: existing.secretEncrypted,
-      },
-    });
-
-    await this.audit.record({
-      actor: { id: user.id, role: user.role },
-      action: 'webhook_secret.rotated',
-      entityType: 'WebhookEndpoint',
-      entityId: id,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.webhookEndpoint.update({
+        where: { id },
+        data: {
+          secretEncrypted: newEncrypted,
+          previousSecretEncrypted: existing.secretEncrypted,
+        },
+      });
+      await this.audit.record(
+        {
+          actor: { id: user.id, role: user.role },
+          action: 'webhook_secret.rotated',
+          entityType: 'WebhookEndpoint',
+          entityId: id,
+        },
+        tx,
+      );
+      return result;
     });
 
     return {
@@ -368,18 +423,29 @@ export class MerchantsService {
     };
   }
 
-  async listWebhookAttempts(user: AuthUser, id: string) {
+  /** Newest first. `total` lets the controller expose the full count (X-Total-Count). */
+  async listWebhookAttempts(
+    user: AuthUser,
+    id: string,
+    q: PaginationQuery = new ListWebhookAttemptsQuery(),
+  ) {
     const merchant = await this.getMerchantForUser(user.id);
     const existing = await this.prisma.webhookEndpoint.findFirst({
       where: { id, merchantId: merchant.id },
     });
     if (!existing) throw notFound('WebhookEndpoint');
 
-    return this.prisma.webhookAttempt.findMany({
-      where: { endpointId: id },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+    const where = { endpointId: id };
+    const [data, total] = await Promise.all([
+      this.prisma.webhookAttempt.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: q.skip,
+        take: q.take,
+      }),
+      this.prisma.webhookAttempt.count({ where }),
+    ]);
+    return { data, total };
   }
 
   async getMyParcels(user: AuthUser, q: PaginationQuery, status?: ParcelStatus) {
@@ -544,5 +610,14 @@ export class MerchantsService {
     });
 
     return this.toDto(updated);
+  }
+}
+
+/** Host of a webhook URL for audit metadata (never the path or query). */
+function urlHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return 'invalid-url';
   }
 }

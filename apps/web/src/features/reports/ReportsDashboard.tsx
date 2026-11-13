@@ -1,49 +1,42 @@
 'use client';
 
+import { CalendarRange, ChartColumn, Download, RotateCcw, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   Alert,
+  Avatar,
   Button,
   Card,
-  EmptyState,
+  ChartCard,
+  FormField,
   Input,
+  ProgressBar,
   Select,
   Table,
+  Tabs,
   type Column,
 } from '@/components/ui';
+import { BarChart } from '@/components/ui/charts';
 import { api } from '@/lib/api/client';
 import { errorMessage } from '@/lib/api/errors';
+import { formatNumber } from '@/lib/format';
 import type { Role } from '@swiftdrop/contracts';
 import { csvCell } from './csv';
+import {
+  courierSuccessRate,
+  DeliveryKpis,
+  percentage,
+  VolumeBars,
+  type CourierPerformance,
+  type DailyVolume,
+  type DeliverySummary,
+} from './report-widgets';
 
 export interface ReportZone {
   id: string;
   code: string;
   name: string;
   isActive: boolean;
-}
-
-interface DeliverySummary {
-  total: number;
-  delivered: number;
-  failed: number;
-  inProgress: number;
-  successRate: number;
-}
-
-interface DailyVolume {
-  date: string;
-  created: number;
-  delivered: number;
-  failed: number;
-}
-
-interface CourierPerformance {
-  courierId: string;
-  name: string;
-  assigned: number;
-  delivered: number;
-  failed: number;
 }
 
 export interface ReportData {
@@ -60,20 +53,7 @@ interface ReportsDashboardProps {
   zones: ReportZone[];
 }
 
-const numberFormat = new Intl.NumberFormat();
-const dateFormat = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric',
-});
-
-function percentage(value: number): string {
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-function courierSuccessRate(row: CourierPerformance): number {
-  const terminalOutcomes = row.delivered + row.failed;
-  return terminalOutcomes === 0 ? 0 : row.delivered / terminalOutcomes;
-}
+type SortKey = 'delivered' | 'success' | 'assigned';
 
 function exportCsv(data: ReportData) {
   const rows = [
@@ -101,24 +81,59 @@ function exportCsv(data: ReportData) {
   URL.revokeObjectURL(url);
 }
 
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-6" aria-label="Loading reports" role="status">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {Array.from({ length: 5 }, (_, index) => (
-          <Card key={index} className="animate-pulse">
-            <div className="h-4 w-24 rounded bg-canvas" />
-            <div className="mt-4 h-8 w-16 rounded bg-canvas" />
-          </Card>
-        ))}
-      </div>
-      <Card className="animate-pulse">
-        <div className="h-5 w-40 rounded bg-canvas" />
-        <div className="mt-6 h-48 rounded bg-canvas" />
-      </Card>
-    </div>
-  );
-}
+const courierColumns: Column<CourierPerformance>[] = [
+  {
+    header: 'Courier',
+    cell: (row) => (
+      <span className="flex items-center gap-2.5">
+        <Avatar name={row.name} size="sm" />
+        <span className="font-medium text-ink">{row.name}</span>
+      </span>
+    ),
+  },
+  {
+    header: 'Assigned',
+    cell: (row) => formatNumber(row.assigned),
+    className: 'px-4 py-3 text-right tabular-nums',
+    headerClassName: 'text-right',
+  },
+  {
+    header: 'Delivered',
+    cell: (row) => formatNumber(row.delivered),
+    className: 'px-4 py-3 text-right tabular-nums',
+    headerClassName: 'text-right',
+  },
+  {
+    header: 'Failed',
+    cell: (row) => (
+      <span className={row.failed > 0 ? 'text-danger' : undefined}>{formatNumber(row.failed)}</span>
+    ),
+    className: 'px-4 py-3 text-right tabular-nums',
+    headerClassName: 'text-right',
+  },
+  {
+    header: 'Success rate',
+    cell: (row) => {
+      const rate = courierSuccessRate(row);
+      const outcomes = row.delivered + row.failed;
+      return (
+        <div className="flex min-w-40 items-center gap-3">
+          <ProgressBar
+            value={rate * 100}
+            tone={
+              outcomes === 0 ? 'info' : rate >= 0.9 ? 'success' : rate >= 0.7 ? 'warning' : 'danger'
+            }
+            size="sm"
+            label={`${row.name} success rate`}
+          />
+          <span className="w-12 shrink-0 text-right text-xs font-medium text-ink tabular-nums">
+            {outcomes === 0 ? '—' : percentage(rate)}
+          </span>
+        </div>
+      );
+    },
+  },
+];
 
 export function ReportsDashboard({
   role,
@@ -129,27 +144,22 @@ export function ReportsDashboard({
 }: ReportsDashboardProps) {
   const [data, setData] = useState<ReportData | null>(initialData);
   const [error, setError] = useState(initialError);
-  const [loading, setLoading] = useState(!initialData && !initialError);
+  const [loading, setLoading] = useState(false);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [zoneId, setZoneId] = useState('');
+  const [sort, setSort] = useState<SortKey>('delivered');
   const activeZones = zones.filter((zone) => zone.isActive);
+  const rangeInvalid = Boolean(from && to && to < from);
 
-  async function loadReports() {
+  async function loadReports(query: { from?: string; to?: string; zoneId?: string }) {
     setLoading(true);
     setError(undefined);
-    const query = {
-      ...(from ? { from } : {}),
-      ...(to ? { to } : {}),
-      ...(zoneId ? { zoneId } : {}),
-    };
     // A network failure rejects instead of returning { error }; show it rather than spin forever.
     const responses = await Promise.all([
       api.GET('/api/v1/admin/reports/deliveries', { params: { query } }),
       api.GET('/api/v1/admin/reports/daily-volume', { params: { query } }),
-      api.GET('/api/v1/admin/reports/couriers', {
-        params: { query },
-      }),
+      api.GET('/api/v1/admin/reports/couriers', { params: { query } }),
     ]).catch(() => null);
     setLoading(false);
     if (!responses) {
@@ -162,67 +172,74 @@ export function ReportsDashboard({
       setError(errorMessage(requestError, 'Could not load reports'));
       return;
     }
-    setData({
-      summary: summary.data,
-      dailyVolume: dailyVolume.data,
-      couriers: couriers.data,
-    });
+    setData({ summary: summary.data, dailyVolume: dailyVolume.data, couriers: couriers.data });
   }
 
-  const maxVolume = useMemo(
-    () =>
-      Math.max(
-        1,
-        ...(data?.dailyVolume.flatMap((row) => [row.created, row.delivered, row.failed]) ?? []),
-      ),
-    [data],
-  );
+  const currentQuery = () => ({
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
+    ...(zoneId ? { zoneId } : {}),
+  });
 
-  const courierColumns: Column<CourierPerformance>[] = [
-    {
-      header: 'Courier',
-      cell: (row) => <span className="font-medium text-ink">{row.name}</span>,
-    },
-    { header: 'Assigned', cell: (row) => numberFormat.format(row.assigned) },
-    { header: 'Delivered', cell: (row) => numberFormat.format(row.delivered) },
-    { header: 'Failed', cell: (row) => numberFormat.format(row.failed) },
-    { header: 'Success rate', cell: (row) => percentage(courierSuccessRate(row)) },
-  ];
+  function reset() {
+    setFrom('');
+    setTo('');
+    setZoneId('');
+    void loadReports({});
+  }
+
+  const couriers = useMemo(() => {
+    const rows = [...(data?.couriers ?? [])];
+    const by: Record<SortKey, (r: CourierPerformance) => number> = {
+      delivered: (r) => r.delivered,
+      assigned: (r) => r.assigned,
+      success: (r) => courierSuccessRate(r),
+    };
+    return rows.sort((a, b) => by[sort](b) - by[sort](a) || a.name.localeCompare(b.name));
+  }, [data, sort]);
+
+  const hasOutcomes = couriers.some((c) => c.delivered + c.failed > 0);
+  const zoneName = activeZones.find((z) => z.id === zoneId)?.name;
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="lg:sticky lg:top-20 lg:z-10">
         <form
-          className="grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto] lg:items-end"
           onSubmit={(event) => {
             event.preventDefault();
-            void loadReports();
+            if (!rangeInvalid) void loadReports(currentQuery());
           }}
         >
-          <label className="text-sm font-medium">
-            From
+          <FormField label="From" htmlFor="report-from">
             <Input
-              className="mt-1"
+              id="report-from"
               type="date"
               value={from}
+              max={to || undefined}
               onChange={(event) => setFrom(event.target.value)}
             />
-          </label>
-          <label className="text-sm font-medium">
-            To
+          </FormField>
+          <FormField
+            label="To"
+            htmlFor="report-to"
+            error={rangeInvalid ? 'End date cannot be before the start date.' : undefined}
+          >
             <Input
-              className="mt-1"
+              id="report-to"
               type="date"
               value={to}
+              min={from || undefined}
+              aria-invalid={rangeInvalid}
               onChange={(event) => setTo(event.target.value)}
             />
-          </label>
-          <label className="text-sm font-medium">
-            Zone
+          </FormField>
+          <FormField label="Zone" htmlFor="report-zone">
             <Select
-              className="mt-1"
+              id="report-zone"
               value={zoneId}
               onChange={(event) => setZoneId(event.target.value)}
+              disabled={Boolean(zoneError)}
             >
               <option value="">All zones</option>
               {activeZones.map((zone) => (
@@ -231,159 +248,154 @@ export function ReportsDashboard({
                 </option>
               ))}
             </Select>
-          </label>
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Loading…' : 'Apply filters'}
-          </Button>
+          </FormField>
+          <div className="flex gap-2 sm:col-span-2 lg:col-span-1">
+            <Button
+              type="submit"
+              disabled={loading || rangeInvalid}
+              className="flex-1 lg:flex-none"
+            >
+              {loading ? 'Loading…' : 'Apply filters'}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon"
+              onClick={reset}
+              disabled={loading}
+              aria-label="Reset filters"
+              title="Reset filters"
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
         </form>
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-3 text-xs text-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <CalendarRange className="h-3.5 w-3.5" aria-hidden="true" />
+            {from || to ? `${from || '…'} → ${to || 'today'}` : 'Last 30 days'}
+            {zoneName ? ` · ${zoneName}` : ' · All zones'}
+          </span>
+          <span>
+            Asia/Colombo calendar days. KPI cards count unique parcels with activity in the range;
+            daily rows show creation and latest terminal events.
+          </span>
+        </div>
         {zoneError ? (
-          <Alert tone="error">
-            <span className="mt-3 block">
-              {zoneError}. Zone filtering is unavailable until the Zone Management service is
-              available.
-            </span>
+          <Alert tone="warning" className="mt-3">
+            {zoneError}. Zone filtering is unavailable until the Zone Management service is
+            available.
           </Alert>
         ) : activeZones.length === 0 ? (
           <p className="mt-3 text-xs text-muted">
             No configured delivery zones are available. All zones is selected.
           </p>
         ) : null}
-        <p className="mt-3 text-xs text-muted">
-          Reports use Asia/Colombo calendar days. KPI cards count unique parcels with activity in
-          the range; daily rows show creation and latest terminal events. Leave dates blank for the
-          last 30 days.
-        </p>
       </Card>
 
-      {loading && !data ? <LoadingSkeleton /> : null}
       {error ? (
-        <Alert tone="error">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span>{error}</span>
-            <Button variant="secondary" onClick={() => void loadReports()}>
+        <Alert
+          tone="error"
+          action={
+            <Button variant="secondary" size="sm" onClick={() => void loadReports(currentQuery())}>
               Retry
             </Button>
-          </div>
+          }
+        >
+          {error}
         </Alert>
       ) : null}
 
-      {data ? (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            {[
-              ['Total parcels', data.summary.total],
-              ['Delivered', data.summary.delivered],
-              ['Failed', data.summary.failed],
-              ['In progress', data.summary.inProgress],
-              ['Success rate', percentage(data.summary.successRate)],
-            ].map(([label, value]) => (
-              <Card key={String(label)}>
-                <p className="text-sm text-muted">{label}</p>
-                <p className="mt-2 text-3xl font-semibold tracking-tight">
-                  {typeof value === 'number' ? numberFormat.format(value) : value}
-                </p>
-              </Card>
-            ))}
-          </div>
+      <div
+        className={loading ? 'opacity-60 transition-opacity' : 'transition-opacity'}
+        aria-busy={loading}
+      >
+        {data || loading ? (
+          <div className="space-y-6">
+            <DeliveryKpis summary={data?.summary} daily={data?.dailyVolume} loading={!data} />
 
-          <Card>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold">Daily delivery volume</h2>
-                <p className="mt-1 text-sm text-muted">
-                  Creation and latest delivered/failed events by Colombo calendar day.
-                </p>
-              </div>
-              <Button variant="secondary" onClick={() => exportCsv(data)}>
-                Export CSV
-              </Button>
-            </div>
-            {data.dailyVolume.length === 0 ? (
-              <div className="mt-6">
-                <EmptyState
-                  title="No daily volume data"
-                  description="Try a different date range or zone."
-                />
-              </div>
-            ) : (
-              <div className="mt-6">
-                <div
-                  className="mb-4 flex flex-wrap gap-4 text-xs text-muted"
-                  aria-label="Chart legend"
+            <ChartCard
+              title="Daily delivery volume"
+              description="Creation and latest delivered / failed events by Colombo calendar day."
+              icon={<ChartColumn />}
+              actions={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => data && exportCsv(data)}
+                  disabled={!data}
                 >
-                  <span>
-                    <i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-brand" />
-                    Created
-                  </span>
-                  <span>
-                    <i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-success" />
-                    Delivered
-                  </span>
-                  <span>
-                    <i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-danger" />
-                    Failed
-                  </span>
-                </div>
-                <div
-                  className="flex min-h-56 items-end gap-2 overflow-x-auto border-b border-line pb-2"
-                  role="img"
-                  aria-label="Daily parcel volume bar chart"
-                >
-                  {data.dailyVolume.map((row) => (
-                    <div
-                      key={row.date}
-                      className="flex min-w-12 flex-1 flex-col items-center gap-2"
-                    >
-                      <div className="flex h-44 items-end gap-0.5">
-                        {[
-                          ['Created', row.created, 'bg-brand'],
-                          ['Delivered', row.delivered, 'bg-success'],
-                          ['Failed', row.failed, 'bg-danger'],
-                        ].map(([label, value, color]) => (
-                          <div
-                            key={String(label)}
-                            className={`w-3 rounded-t ${color}`}
-                            style={{
-                              height: `${(Number(value) / maxVolume) * 100}%`,
-                              minHeight: value ? '4px' : '0',
-                            }}
-                            title={`${label}: ${value}`}
-                          />
-                        ))}
-                      </div>
-                      <span className="text-[10px] text-muted">
-                        {dateFormat.format(new Date(`${row.date}T00:00:00`))}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Card>
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  Export CSV
+                </Button>
+              }
+              loading={!data}
+              empty={data?.dailyVolume.length === 0}
+              emptyTitle="No daily volume data"
+              emptyDescription="Try a different date range or zone."
+              minHeight={320}
+            >
+              {data && <VolumeBars daily={data.dailyVolume} />}
+            </ChartCard>
 
-          <Card>
-            <div className="mb-4">
-              <h2 className="text-lg font-semibold">Courier performance</h2>
-              <p className="mt-1 text-sm text-muted">
-                {role === 'ADMIN'
+            <ChartCard
+              title="Courier performance"
+              description={
+                role === 'ADMIN'
                   ? 'Delivery outcomes by courier.'
-                  : 'Courier workload and delivery outcomes.'}
-              </p>
-            </div>
-            <Table
-              columns={courierColumns}
-              rows={data.couriers}
-              rowKey={(row) => row.courierId}
-              empty={
-                <EmptyState
-                  title="No courier activity"
-                  description="No assignments matched this date range."
+                  : 'Courier workload and delivery outcomes.'
+              }
+              icon={<Users />}
+              actions={
+                <Tabs
+                  label="Sort couriers by"
+                  value={sort}
+                  onChange={(v) => setSort(v as SortKey)}
+                  items={[
+                    { value: 'delivered', label: 'Delivered' },
+                    { value: 'success', label: 'Success rate' },
+                    { value: 'assigned', label: 'Assigned' },
+                  ]}
                 />
               }
-            />
-          </Card>
-        </>
-      ) : null}
+              loading={!data}
+              empty={couriers.length === 0}
+              emptyTitle="No courier activity"
+              emptyDescription="No assignments matched this date range."
+              minHeight={120}
+              flush
+            >
+              <div>
+                {hasOutcomes && (
+                  <div className="border-b border-line p-5">
+                    <BarChart
+                      data={couriers.slice(0, 10)}
+                      xKey="name"
+                      xLabel="Courier"
+                      layout="horizontal-bars"
+                      stacked
+                      height={Math.max(120, Math.min(couriers.length, 10) * 36 + 40)}
+                      label="Delivered and failed parcels per courier"
+                      series={[
+                        { key: 'delivered', label: 'Delivered', color: 'var(--sd-chart-3)' },
+                        { key: 'failed', label: 'Failed', color: 'var(--sd-chart-4)' },
+                      ]}
+                      valueFormatter={(v) => formatNumber(v)}
+                    />
+                  </div>
+                )}
+                <Table
+                  bare
+                  columns={courierColumns}
+                  rows={couriers}
+                  rowKey={(row) => row.courierId}
+                  caption="Courier performance"
+                />
+              </div>
+            </ChartCard>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

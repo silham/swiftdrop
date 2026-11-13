@@ -141,3 +141,14 @@ The `POST /pricing/estimate` endpoint is public. Admin CRUD lives at `/admin/zon
   M4's seed parcels and some tests use 52500; zone/rule audit entries are written outside the
   change's transaction; `validFrom <= validTo` isn't checked; add 401/403 cases for the admin
   zone/rule endpoints.
+- **Failed parcels (re-attempt flow):** FAILED keeps the ACTIVE assignment, so the same courier
+  re-attempts. The last allowed failure completes the assignment (done by M6's `updateStatus`).
+  Dispatch now rejects assigning a FAILED parcel with no attempts left (`MAX_ATTEMPTS_REACHED`), hides
+  it from the unassigned queue, and `unassign` also accepts FAILED parcels so a dispatcher can hand
+  one to another courier. See `docs/contracts/parcel-lifecycle.md`.
+- **Follow-ups closed (P1 pass):** zone and pricing-rule changes are written together with their audit
+  entry in one transaction; a rule with `validFrom` later than `validTo` is rejected (400, also when an
+  update changes only one side). New `GET /dispatch/assignments` (ACTIVE, newest first, with
+  `canUnassign`) feeds an "Active assignments" card on `/dispatch` with an Unassign button, covered by
+  integration tests and an e2e test. The seeded demo parcels now have a consistent fee (55000) and
+  courier work (see `packages/db/seed/30-parcels.ts`).

@@ -10,7 +10,8 @@ export default async function MerchantApiKeysPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={'API keys'}
+        eyebrow="Developers"
+        title="API keys"
         description="Create, view and revoke partner API keys. Raw keys are shown only once at creation."
       />
       <ApiKeysManager />

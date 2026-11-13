@@ -171,24 +171,30 @@ export class PricingService {
       }
     }
 
-    const zone = await this.prisma.deliveryZone.create({
-      data: {
-        code,
-        name,
-        cities: cleanedCities,
-        isActive,
-      },
-    });
+    // The change and its audit entry commit together or not at all.
+    return this.prisma.$transaction(async (tx) => {
+      const zone = await tx.deliveryZone.create({
+        data: {
+          code,
+          name,
+          cities: cleanedCities,
+          isActive,
+        },
+      });
 
-    await this.audit.record({
-      actor: actor ? { id: actor.id, role: actor.role } : null,
-      action: 'zone.created',
-      entityType: 'zone',
-      entityId: zone.id,
-      metadata: { code: zone.code, name: zone.name, citiesCount: zone.cities.length },
-    });
+      await this.audit.record(
+        {
+          actor: actor ? { id: actor.id, role: actor.role } : null,
+          action: 'zone.created',
+          entityType: 'zone',
+          entityId: zone.id,
+          metadata: { code: zone.code, name: zone.name, citiesCount: zone.cities.length },
+        },
+        tx,
+      );
 
-    return zone;
+      return zone;
+    });
   }
 
   async updateZone(id: string, dto: UpdateZoneDto, actor?: AuthUser): Promise<ZoneDto> {
@@ -234,25 +240,30 @@ export class PricingService {
       }
     }
 
-    const updated = await this.prisma.deliveryZone.update({
-      where: { id },
-      data: {
-        code: dto.code ? dto.code.trim().toUpperCase() : undefined,
-        name: dto.name ? dto.name.trim() : undefined,
-        cities: dto.cities ? targetCities : undefined,
-        isActive: dto.isActive !== undefined ? dto.isActive : undefined,
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.deliveryZone.update({
+        where: { id },
+        data: {
+          code: dto.code ? dto.code.trim().toUpperCase() : undefined,
+          name: dto.name ? dto.name.trim() : undefined,
+          cities: dto.cities ? targetCities : undefined,
+          isActive: dto.isActive !== undefined ? dto.isActive : undefined,
+        },
+      });
 
-    await this.audit.record({
-      actor: actor ? { id: actor.id, role: actor.role } : null,
-      action: 'zone.updated',
-      entityType: 'zone',
-      entityId: id,
-      metadata: { code: updated.code, name: updated.name, isActive: updated.isActive },
-    });
+      await this.audit.record(
+        {
+          actor: actor ? { id: actor.id, role: actor.role } : null,
+          action: 'zone.updated',
+          entityType: 'zone',
+          entityId: id,
+          metadata: { code: updated.code, name: updated.name, isActive: updated.isActive },
+        },
+        tx,
+      );
 
-    return updated;
+      return updated;
+    });
   }
 
   async listRules(): Promise<PricingRuleDto[]> {
@@ -303,28 +314,43 @@ export class PricingService {
       if (!toZone) throw notFound('Destination delivery zone');
     }
 
-    const rule = await this.prisma.pricingRule.create({
-      data: {
-        name: dto.name.trim(),
-        fromZoneId: dto.fromZoneId ?? null,
-        toZoneId: dto.toZoneId ?? null,
-        size: dto.size ?? null,
-        baseFeeCents: dto.baseFeeCents,
-        perKgCents: dto.perKgCents,
-        priority: dto.priority ?? 0,
-        isActive: dto.isActive ?? true,
-        validFrom: dto.validFrom ? new Date(dto.validFrom) : null,
-        validTo: dto.validTo ? new Date(dto.validTo) : null,
-      },
-      include: { fromZone: true, toZone: true },
-    });
+    const validFrom = dto.validFrom ? new Date(dto.validFrom) : null;
+    const validTo = dto.validTo ? new Date(dto.validTo) : null;
+    assertValidityWindow(validFrom, validTo);
 
-    await this.audit.record({
-      actor: actor ? { id: actor.id, role: actor.role } : null,
-      action: 'pricing_rule.created',
-      entityType: 'pricing_rule',
-      entityId: rule.id,
-      metadata: { name: rule.name, baseFeeCents: rule.baseFeeCents, perKgCents: rule.perKgCents },
+    const rule = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.pricingRule.create({
+        data: {
+          name: dto.name.trim(),
+          fromZoneId: dto.fromZoneId ?? null,
+          toZoneId: dto.toZoneId ?? null,
+          size: dto.size ?? null,
+          baseFeeCents: dto.baseFeeCents,
+          perKgCents: dto.perKgCents,
+          priority: dto.priority ?? 0,
+          isActive: dto.isActive ?? true,
+          validFrom,
+          validTo,
+        },
+        include: { fromZone: true, toZone: true },
+      });
+
+      await this.audit.record(
+        {
+          actor: actor ? { id: actor.id, role: actor.role } : null,
+          action: 'pricing_rule.created',
+          entityType: 'pricing_rule',
+          entityId: created.id,
+          metadata: {
+            name: created.name,
+            baseFeeCents: created.baseFeeCents,
+            perKgCents: created.perKgCents,
+          },
+        },
+        tx,
+      );
+
+      return created;
     });
 
     return {
@@ -385,35 +411,47 @@ export class PricingService {
       if (!toZone) throw notFound('Destination delivery zone');
     }
 
-    const updated = await this.prisma.pricingRule.update({
-      where: { id },
-      data: {
-        name: dto.name ? dto.name.trim() : undefined,
-        fromZoneId: dto.fromZoneId !== undefined ? dto.fromZoneId : undefined,
-        toZoneId: dto.toZoneId !== undefined ? dto.toZoneId : undefined,
-        size: dto.size !== undefined ? dto.size : undefined,
-        baseFeeCents: dto.baseFeeCents !== undefined ? dto.baseFeeCents : undefined,
-        perKgCents: dto.perKgCents !== undefined ? dto.perKgCents : undefined,
-        priority: dto.priority !== undefined ? dto.priority : undefined,
-        isActive: dto.isActive !== undefined ? dto.isActive : undefined,
-        validFrom:
-          dto.validFrom !== undefined
-            ? dto.validFrom
-              ? new Date(dto.validFrom)
-              : null
-            : undefined,
-        validTo:
-          dto.validTo !== undefined ? (dto.validTo ? new Date(dto.validTo) : null) : undefined,
-      },
-      include: { fromZone: true, toZone: true },
-    });
+    // The window that will apply after this update: new value, else the stored one.
+    const validFrom =
+      dto.validFrom !== undefined
+        ? dto.validFrom
+          ? new Date(dto.validFrom)
+          : null
+        : existing.validFrom;
+    const validTo =
+      dto.validTo !== undefined ? (dto.validTo ? new Date(dto.validTo) : null) : existing.validTo;
+    assertValidityWindow(validFrom, validTo);
 
-    await this.audit.record({
-      actor: actor ? { id: actor.id, role: actor.role } : null,
-      action: 'pricing_rule.updated',
-      entityType: 'pricing_rule',
-      entityId: id,
-      metadata: { name: updated.name, isActive: updated.isActive },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.pricingRule.update({
+        where: { id },
+        data: {
+          name: dto.name ? dto.name.trim() : undefined,
+          fromZoneId: dto.fromZoneId !== undefined ? dto.fromZoneId : undefined,
+          toZoneId: dto.toZoneId !== undefined ? dto.toZoneId : undefined,
+          size: dto.size !== undefined ? dto.size : undefined,
+          baseFeeCents: dto.baseFeeCents !== undefined ? dto.baseFeeCents : undefined,
+          perKgCents: dto.perKgCents !== undefined ? dto.perKgCents : undefined,
+          priority: dto.priority !== undefined ? dto.priority : undefined,
+          isActive: dto.isActive !== undefined ? dto.isActive : undefined,
+          validFrom: dto.validFrom !== undefined ? validFrom : undefined,
+          validTo: dto.validTo !== undefined ? validTo : undefined,
+        },
+        include: { fromZone: true, toZone: true },
+      });
+
+      await this.audit.record(
+        {
+          actor: actor ? { id: actor.id, role: actor.role } : null,
+          action: 'pricing_rule.updated',
+          entityType: 'pricing_rule',
+          entityId: id,
+          metadata: { name: result.name, isActive: result.isActive },
+        },
+        tx,
+      );
+
+      return result;
     });
 
     return {
@@ -433,5 +471,16 @@ export class PricingService {
       createdAt: updated.createdAt,
       updatedAt: updated.updatedAt,
     };
+  }
+}
+
+/** A rule that ends before it starts could never apply; refuse it. */
+function assertValidityWindow(validFrom: Date | null, validTo: Date | null) {
+  if (validFrom && validTo && validFrom.getTime() > validTo.getTime()) {
+    throw new AppError(
+      ERROR_CODES.VALIDATION_FAILED,
+      'validFrom must not be later than validTo',
+      HttpStatus.BAD_REQUEST,
+    );
   }
 }

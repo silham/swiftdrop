@@ -10,7 +10,16 @@ const GOOGLE_START = '/api/v1/auth/google';
  * It checks the OAuth start endpoint first, so an environment without Google credentials (501)
  * shows a friendly message instead of a raw JSON error page.
  */
-export function GoogleButton({ label = 'Continue with Google' }: { label?: string }) {
+export function GoogleButton({
+  label = 'Continue with Google',
+  next,
+}: {
+  label?: string;
+  /** Same-site path to return to after sign-in (the API checks it again). */
+  next?: string | null;
+}) {
+  const startUrl = next ? `${GOOGLE_START}?next=${encodeURIComponent(next)}` : GOOGLE_START;
+
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -29,8 +38,7 @@ export function GoogleButton({ label = 'Continue with Google' }: { label?: strin
       // Network hiccup: fall through and let the full-page navigation report it.
     }
     // A full-page navigation is required: this is an API redirect, not a Next.js route.
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.assign(GOOGLE_START);
+    window.location.assign(startUrl);
   }
 
   return (
@@ -45,7 +53,7 @@ export function GoogleButton({ label = 'Continue with Google' }: { label?: strin
         type="button"
         onClick={start}
         disabled={pending}
-        className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:bg-canvas disabled:opacity-60"
+        className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-line-strong bg-surface px-4 py-2 text-sm font-medium text-ink shadow-card transition hover:bg-surface-2 disabled:opacity-60"
       >
         {/* Google's brand colours are fixed by their guidelines, so they are not design tokens. */}
         <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">

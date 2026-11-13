@@ -26,10 +26,70 @@ src/lib/auth/session.ts        getSession / requireRole
 
 ## UI rules
 
-- Use `@/components/ui` and the design tokens (`bg-brand`, `text-muted`, `border-line`…). No raw hex colours.
+- Use `@/components/ui` and the design tokens (`bg-brand`, `text-muted`, `border-line`…). No raw hex
+  colours and **no Tailwind palette classes** (`bg-white`, `text-slate-600`, `bg-red-50`…): they break dark mode.
 - Every list has a loading, an empty and an error state. Every form has labelled fields (`FormField`)
   and shows the API error message.
 - Build mobile-first. The courier portal **must** work well on a phone.
 - Accessibility: use real `<button>`/`<label>` elements, keyboard reachable controls and `alt` text.
 - Never read tokens in JavaScript. Auth is httpOnly cookies only.
 - The `NotImplemented` placeholder must be gone from your pages by Week 6.
+
+## Routes
+
+| Route                                                       | What                                                         |
+| ----------------------------------------------------------- | ------------------------------------------------------------ |
+| `/`                                                         | marketing landing page (`app/(marketing)/page.tsx`)          |
+| `/track`, `/track/[trackingNumber]`                         | public tracking search and result (`app/(marketing)/track/`) |
+| `/login`, `/register`, `/merchant-signup`                   | split-screen auth layout (`app/(auth)/`)                     |
+| `/customer`, `/merchant`, `/courier`, `/dispatch`, `/admin` | portals with the sidebar shell                               |
+
+Route groups `(marketing)` and `(auth)` only share layouts; they don't change URLs.
+
+## Theme (light / dark)
+
+- `<html data-theme="light|dark|system">` comes from the `sd_theme` cookie (root layout), so there is
+  no flash on reload. `system` follows the OS. `ThemeToggle` (`components/theme`) switches it.
+- Tokens live in `app/globals.css` as `--sd-*` variables with a light and a dark value, mapped to
+  Tailwind colours with `@theme inline`. Every token utility switches theme automatically.
+- Main tokens: `canvas` (page), `surface` / `surface-2` (cards, table headers), `ink` / `muted` /
+  `subtle` (text), `line` / `line-strong` (borders), `brand` / `brand-fg` / `brand-soft` / `brand-hover`,
+  `success|warning|danger|info|violet` with `-soft` variants, `sidebar-*` (navy shell), `overlay`,
+  `chart-1…6`. In inline styles or SVG use the raw variable: `var(--sd-chart-1)`.
+- Text on a `bg-brand` fill is `text-brand-fg`, on `bg-danger` it is `text-danger-fg`, never `text-white`.
+- `dark:` works (it respects the cookie and the OS) but prefer a token; add a token by PR if one is missing.
+
+## Shell
+
+`PortalShell` (props unchanged) renders a left sidebar (collapsible on desktop, saved in the
+`sd_sidebar` cookie; a drawer on phones) and a sticky top bar with quick tracking. The courier portal
+gets a bottom tab bar on phones. Add `icon` (a key from `components/layout/nav-icons.ts`) and an
+optional `section` to items in `config/nav/*.ts`.
+
+## UI kit catalogue (`@/components/ui`)
+
+| Need                             | Component                                                                                                                         |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Buttons, links styled as buttons | `Button` (`variant`, `size`), `buttonClasses()` for `<Link>`                                                                      |
+| Containers                       | `Card` (`flush`), `CardHeader`, `CardBody`, `CardFooter`                                                                          |
+| KPI tiles                        | `StatCard` (icon, tone, hint, delta, sparkline `trend`, `href`), `StatGrid`                                                       |
+| Charts (client)                  | `@/components/ui/charts`: `AreaTrend`, `BarChart`, `DonutChart`, `BarList`, `Sparkline`                                           |
+| Widget with states               | `ChartCard` (`loading`, `error`, `empty`)                                                                                         |
+| Labels                           | `Badge` (tones), `StatusBadge` (parcel status)                                                                                    |
+| Tables and lists                 | `Table` (`dense`, `bare`), `Pagination`, `Toolbar`, `Tabs` (buttons or links)                                                     |
+| Overlays                         | `Modal`, `Drawer` (focus trap, Esc, backdrop)                                                                                     |
+| Feedback                         | `Alert` (`title`, `action`), `EmptyState` (`icon`, `compact`), `Skeleton`, `Spinner`                                              |
+| Misc                             | `Avatar`, `ProgressBar` (`tone="auto"` for capacity), `KeyValue`, `ActivityFeed`, `PageHeader` (`eyebrow`, `breadcrumbs`, `meta`) |
+
+Formatting helpers (`formatNumber`, `formatPercent`, `formatMoney`, `formatDate(Time)`,
+`formatRelative`) are in `@/lib/format`.
+
+## Dashboard pattern
+
+1. `PageHeader` with the page actions.
+2. A KPI row: `<StatGrid>` of `StatCard`s.
+3. A main grid (`grid gap-6 lg:grid-cols-3`): charts span 2 columns, side widgets take 1.
+4. Tables inside a `Card` with a `Toolbar` (filters) and `Pagination`.
+
+Fetch in the server page with `Promise.all` and give each widget its own error, so one failing
+endpoint never blanks the page.

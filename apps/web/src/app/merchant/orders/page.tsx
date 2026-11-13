@@ -10,7 +10,8 @@ export default async function MerchantOrdersPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={'Orders'}
+        eyebrow="Merchant portal"
+        title="Orders"
         description="View and filter all parcels submitted through your partner API."
       />
       <MerchantOrdersView />

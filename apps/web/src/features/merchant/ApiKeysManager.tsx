@@ -1,17 +1,24 @@
 'use client';
 
+import { KeyRound, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   Alert,
+  Badge,
   Button,
   Card,
+  CardBody,
+  CardHeader,
   EmptyState,
   FormField,
   Input,
+  Skeleton,
   Table,
   type Column,
 } from '@/components/ui';
 import { errorMessage } from '@/lib/api/errors';
+import { formatDate, formatDateTime } from '@/lib/format';
+import { SecretReveal } from './SecretReveal';
 
 interface ApiKeyItem {
   id: string;
@@ -28,6 +35,7 @@ async function fetchKeys(signal?: AbortSignal): Promise<ApiKeyItem[]> {
   return (await res.json()) as ApiKeyItem[];
 }
 
+/** Owner: M5. Create, list and revoke partner API keys; the raw key is shown once. */
 export function ApiKeysManager() {
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +48,6 @@ export function ApiKeysManager() {
 
   // One-time newly created key display
   const [createdRawKey, setCreatedRawKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -91,7 +98,6 @@ export function ApiKeysManager() {
       const created = (await res.json()) as { key: string };
 
       setCreatedRawKey(created.key);
-      setCopied(false);
       setKeyName('');
       setIsCreating(false);
       await loadKeys();
@@ -123,25 +129,15 @@ export function ApiKeysManager() {
     }
   }
 
-  async function copyToClipboard(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch {
-      setError('Could not copy the key automatically. Select and copy it manually.');
-    }
-  }
-
   const columns: Column<ApiKeyItem>[] = [
     {
       header: 'Name',
-      cell: (row) => <span className="font-medium">{row.name}</span>,
+      cell: (row) => <span className="font-medium text-ink">{row.name}</span>,
     },
     {
       header: 'Key Prefix',
       cell: (row) => (
-        <code className="rounded bg-canvas px-2 py-0.5 font-mono text-xs text-muted">
+        <code className="rounded-md border border-line bg-surface-2 px-2 py-0.5 font-mono text-xs text-muted">
           {row.prefix}...
         </code>
       ),
@@ -150,7 +146,7 @@ export function ApiKeysManager() {
       header: 'Last Used',
       cell: (row) => (
         <span className="text-xs text-muted">
-          {row.lastUsedAt ? new Date(row.lastUsedAt).toLocaleString() : 'Never'}
+          {row.lastUsedAt ? formatDateTime(row.lastUsedAt) : 'Never'}
         </span>
       ),
     },
@@ -158,30 +154,26 @@ export function ApiKeysManager() {
       header: 'Status',
       cell: (row) =>
         row.revokedAt ? (
-          <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+          <Badge tone="danger" dot>
             Revoked
-          </span>
+          </Badge>
         ) : (
-          <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+          <Badge tone="success" dot>
             Active
-          </span>
+          </Badge>
         ),
     },
     {
       header: 'Created',
-      cell: (row) => (
-        <span className="text-xs text-muted">{new Date(row.createdAt).toLocaleDateString()}</span>
-      ),
+      cell: (row) => <span className="text-xs text-muted">{formatDate(row.createdAt)}</span>,
     },
     {
       header: 'Actions',
+      headerClassName: 'text-right',
+      className: 'px-4 py-3 text-right',
       cell: (row) =>
         !row.revokedAt ? (
-          <Button
-            variant="danger"
-            className="px-2 py-1 text-xs"
-            onClick={() => handleRevoke(row.id)}
-          >
+          <Button variant="danger" size="sm" onClick={() => handleRevoke(row.id)}>
             Revoke
           </Button>
         ) : (
@@ -190,122 +182,118 @@ export function ApiKeysManager() {
     },
   ];
 
+  const activeCount = keys.filter((k) => !k.revokedAt).length;
+
   return (
     <div className="space-y-6">
       {error && <Alert tone="error">{error}</Alert>}
 
-      {/* One-time Newly Created Raw Key Modal/Banner */}
+      {/* One-time newly created raw key */}
       {createdRawKey && (
-        <div className="rounded-lg border-2 border-brand bg-brand-soft/20 p-5 space-y-3">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="font-semibold text-brand-dark text-base">New API Key Generated</h3>
-              <p className="text-xs text-muted mt-0.5">
-                Please copy this key immediately and store it in a secure location. For your
-                security, it will <strong>never be shown again</strong>.
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setCreatedRawKey(null);
-                setCopied(false);
-              }}
-              className="text-xs text-muted hover:text-ink font-medium"
-            >
-              Dismiss ✕
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              readOnly
-              value={createdRawKey}
-              className="w-full rounded border border-line bg-surface px-3 py-2 font-mono text-sm select-all outline-none"
-            />
-            <Button
-              variant="primary"
-              onClick={() => void copyToClipboard(createdRawKey)}
-              className="whitespace-nowrap"
-            >
-              {copied ? '✓ Copied!' : 'Copy Key'}
-            </Button>
-          </div>
-        </div>
+        <SecretReveal
+          title="New API Key Generated"
+          value={createdRawKey}
+          copyLabel="Copy Key"
+          onDismiss={() => setCreatedRawKey(null)}
+        >
+          Please copy this key immediately and store it in a secure location. For your security, it
+          will <strong className="text-ink">never be shown again</strong>.
+        </SecretReveal>
       )}
 
-      {/* Action Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Active & Revoked API Keys</h2>
-          <p className="text-xs text-muted">
-            Used to authenticate with the partner API (<code className="font-mono">X-Api-Key</code>{' '}
-            header).
-          </p>
-        </div>
-        {!isCreating && (
-          <Button variant="primary" onClick={() => setIsCreating(true)}>
-            + Generate Key
-          </Button>
-        )}
-      </div>
-
-      {/* Create Key Form Modal/Card */}
       {isCreating && (
-        <Card className="p-4 space-y-3 border-brand">
-          <h3 className="text-sm font-semibold">Generate a New Partner API Key</h3>
-          <form onSubmit={handleCreateKey} className="flex items-end gap-3">
-            <div className="flex-1">
-              <FormField label="Key Name / Description" htmlFor="keyName">
-                <Input
-                  id="keyName"
-                  placeholder="e.g. Production Shopify Store, Warehouse Webhook"
-                  value={keyName}
-                  onChange={(e) => setKeyName(e.target.value)}
-                  required
-                />
-              </FormField>
-            </div>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? 'Generating...' : 'Confirm'}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setIsCreating(false);
-                setKeyName('');
-              }}
+        <Card flush className="ring-2 ring-brand/30">
+          <CardHeader
+            title="Generate a New Partner API Key"
+            titleAs="h3"
+            icon={<KeyRound />}
+            description="Give the key a name so you can recognise where it is used."
+          />
+          <CardBody>
+            <form
+              onSubmit={handleCreateKey}
+              className="flex flex-col gap-3 sm:flex-row sm:items-end"
             >
-              Cancel
-            </Button>
-          </form>
+              <div className="flex-1">
+                <FormField label="Key Name / Description" htmlFor="keyName">
+                  <Input
+                    id="keyName"
+                    placeholder="e.g. Production Shopify Store, Warehouse Webhook"
+                    value={keyName}
+                    onChange={(e) => setKeyName(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </FormField>
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? 'Generating...' : 'Confirm'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setIsCreating(false);
+                    setKeyName('');
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardBody>
         </Card>
       )}
 
-      {/* Keys Table */}
-      {loading ? (
-        <p role="status" className="text-sm text-muted">
-          Loading API keys...
-        </p>
-      ) : (
-        <Table
-          columns={columns}
-          rows={keys}
-          rowKey={(k) => k.id}
-          empty={
-            <EmptyState
-              title="No API Keys"
-              description="You haven't generated any partner API keys yet."
-              action={
-                <Button variant="primary" onClick={() => setIsCreating(true)}>
-                  Generate Your First Key
-                </Button>
-              }
-            />
+      <Card flush>
+        <CardHeader
+          title="Active & Revoked API Keys"
+          description={
+            <>
+              {activeCount} active · used to authenticate with the partner API (
+              <code className="font-mono">X-Api-Key</code> header).
+            </>
+          }
+          actions={
+            !isCreating && (
+              <Button variant="primary" size="sm" onClick={() => setIsCreating(true)}>
+                <Plus className="h-4 w-4" aria-hidden="true" /> Generate Key
+              </Button>
+            )
           }
         />
-      )}
+        {loading ? (
+          <div className="space-y-3 p-5" role="status" aria-label="Loading API keys...">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : (
+          <Table
+            bare
+            columns={columns}
+            rows={keys}
+            rowKey={(k) => k.id}
+            empty={
+              <div className="p-5">
+                <EmptyState
+                  compact
+                  className="border-0"
+                  icon={<KeyRound />}
+                  title="No API Keys"
+                  description="You haven't generated any partner API keys yet."
+                  action={
+                    <Button variant="primary" onClick={() => setIsCreating(true)}>
+                      Generate Your First Key
+                    </Button>
+                  }
+                />
+              </div>
+            }
+          />
+        )}
+      </Card>
     </div>
   );
 }

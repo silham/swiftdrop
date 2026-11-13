@@ -21,7 +21,7 @@ Every other module calls your service instead of touching parcel status.
 
 - `apps/api/src/modules/parcels/` (ParcelsService, TrackingController, TrackingStreamService), `apps/api/test/parcels/`
 - `packages/contracts/src/parcel-status.ts` (with M1), `packages/db/prisma/schema/parcel.prisma` (booking fields co-owned with M3), `packages/db/seed/30-parcels.ts`
-- Web: `src/app/(public)/track/[trackingNumber]/`, `src/features/tracking/` (TrackForm, timeline, live hook)
+- Web: `src/app/(marketing)/track/` (search page `/track` + result `/track/[trackingNumber]`), `src/features/tracking/` (TrackForm, timeline, live hook)
 - Doc: `docs/contracts/parcel-lifecycle.md`
 
 ## Interfaces you provide (signatures already in `parcels.service.ts`; keep them stable)

@@ -2,22 +2,25 @@
   "name": "@swiftdrop/web",
   "version": "0.1.0",
   "private": true,
-  "description": "Next.js web app — customer, merchant, courier, dispatcher and admin portals.",
+  "description": "Next.js web app \u2014 customer, merchant, courier, dispatcher and admin portals.",
   "scripts": {
     "gen:api": "pnpm --filter @swiftdrop/api openapi:export && openapi-typescript ../api/openapi.json -o src/lib/api/schema.d.ts",
     "dev": "pnpm gen:api && next dev --hostname 0.0.0.0 --port 3000",
     "build": "pnpm gen:api && next build",
     "start": "next start --port 3000",
     "typecheck": "pnpm gen:api && tsc --noEmit",
-    "test": "echo \"web: no unit tests yet (add *.test.tsx with vitest or rely on Playwright in apps/e2e)\""
+    "test": "tsx --tsconfig tsconfig.json --test \"src/**/*.test.ts\" \"src/**/*.test.tsx\""
   },
   "dependencies": {
     "@swiftdrop/contracts": "workspace:*",
     "clsx": "2.1.1",
+    "lucide-react": "1.59.0",
     "next": "16.4.2",
     "openapi-fetch": "0.17.0",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "react-is": "19.3.1",
+    "recharts": "3.10.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",
@@ -26,6 +29,7 @@
     "eslint-config-next": "16.4.2",
     "openapi-typescript": "7.13.0",
     "tailwindcss": "4.3.3",
+    "tsx": "4.23.15",
     "typescript": "6.0.3"
   }
 }

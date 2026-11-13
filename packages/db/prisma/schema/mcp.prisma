@@ -1,0 +1,61 @@
+// Owner: M1 (OAuth 2.1 authorization server for MCP clients such as Claude and ChatGPT)
+// Every secret (client secret, authorization code, access/refresh token) is stored as a SHA-256 hash.
+
+/// A client registered through dynamic client registration (RFC 7591).
+model McpClient {
+  id                      String   @id @default(cuid())
+  clientId                String   @unique
+  clientName              String
+  redirectUris            String[]
+  /// "none" (public client with PKCE), "client_secret_post" or "client_secret_basic"
+  tokenEndpointAuthMethod String   @default("none")
+  secretHash              String?
+  createdAt               DateTime @default(now())
+
+  codes  McpAuthorizationCode[]
+  grants McpGrant[]
+
+  @@map("mcp_clients")
+}
+
+/// Short-lived, single-use authorization code bound to a PKCE challenge.
+model McpAuthorizationCode {
+  id            String    @id @default(cuid())
+  codeHash      String    @unique
+  clientId      String
+  userId        String
+  redirectUri   String
+  codeChallenge String
+  scope         String
+  resource      String
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  client McpClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("mcp_authorization_codes")
+}
+
+/// One access + refresh token pair. Refreshing rotates into a new row and revokes this one.
+model McpGrant {
+  id               String    @id @default(cuid())
+  accessHash       String    @unique
+  refreshHash      String    @unique
+  clientId         String
+  userId           String
+  scope            String
+  resource         String
+  accessExpiresAt  DateTime
+  refreshExpiresAt DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  client McpClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("mcp_grants")
+}

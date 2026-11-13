@@ -10,6 +10,7 @@ export default async function DispatchPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Dispatch"
         title="Unassigned Parcels"
         description="Monitor booked parcels awaiting courier assignment and allocate fleet resources."
       />

@@ -1,0 +1,36 @@
+# Worker: outbox relay → RabbitMQ, notification consumer (email/SMS), merchant webhooks with retry/DLQ.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "swiftdrop.host" (list . "worker") }}
+  labels: {{- include "swiftdrop.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels: {{- include "swiftdrop.selector" (list . "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "swiftdrop.selector" (list . "worker") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: worker
+          image: {{ include "swiftdrop.image" (list . "worker") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom: {{- include "swiftdrop.envFrom" . | nindent 12 }}
+          ports:
+            - { name: health, containerPort: 4100 }
+          readinessProbe:
+            httpGet: { path: /health, port: health }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: health }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources: {{- toYaml .Values.worker.resources | nindent 12 }}
+          securityContext: {{- include "swiftdrop.appSecurityContext" . | nindent 12 }}

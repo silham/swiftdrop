@@ -32,6 +32,8 @@ model User {
   proofsCaptured    ProofOfDelivery[]
   merchantsApproved Merchant[]            @relation("MerchantApprovedBy")
   auditLogs         AuditLog[]
+  mcpAuthCodes      McpAuthorizationCode[]
+  mcpGrants         McpGrant[]
 
   @@index([role])
   @@map("users")

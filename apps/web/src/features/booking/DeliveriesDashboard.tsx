@@ -1,20 +1,48 @@
-import type { ParcelStatus } from '@swiftdrop/contracts';
+import { PARCEL_STATUSES, type ParcelStatus } from '@swiftdrop/contracts';
+import {
+  ArrowRight,
+  CircleCheck,
+  CircleX,
+  MapPin,
+  Package,
+  PackagePlus,
+  Receipt,
+  Search,
+  Truck,
+} from 'lucide-react';
 import Link from 'next/link';
 import {
-  Button,
+  buttonClasses,
   Card,
+  CardBody,
+  CardHeader,
   EmptyState,
+  KeyValue,
   PageHeader,
+  ProgressBar,
   STATUS_LABEL,
+  StatCard,
+  StatGrid,
   StatusBadge,
   Table,
+  Tabs,
 } from '@/components/ui';
+import { formatDate, formatDateTime, formatNumber } from '@/lib/format';
+import { LiveParcelStatus } from './LiveParcelStatus';
 import type { components } from '@/lib/api/schema';
+import { CustomerPagination } from './CustomerPagination';
 import { ProofOfDeliveryPhoto } from './ProofOfDeliveryPhoto';
 
 type DeliveryPage = components['schemas']['ParcelPageDto'];
 type Delivery = components['schemas']['ParcelDto'];
 type CustomerParcel = components['schemas']['CustomerParcelDetailDto'];
+
+/** Per-status counts for the KPI row; `null` means that count could not be loaded. */
+export interface DeliverySummary {
+  total: number | null;
+  delivered: number | null;
+  failed: number | null;
+}
 
 function formatFee(feeCents: number, currency: string) {
   return new Intl.NumberFormat('en-LK', {
@@ -24,70 +52,105 @@ function formatFee(feeCents: number, currency: string) {
   }).format(feeCents / 100);
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium' }).format(new Date(value));
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat('en-LK', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
-}
-
-function Detail({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-muted">{label}</dt>
-      <dd className="mt-1 text-sm text-ink">{children}</dd>
-    </div>
-  );
-}
-
-function pageHref(page: number, status?: ParcelStatus) {
-  const params = new URLSearchParams({ page: String(page) });
-  if (status) params.set('status', status);
-  return `/customer?${params.toString()}`;
-}
-
-const linkButton =
-  'inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition';
+const PROGRESS_STEPS: ParcelStatus[] = [
+  'CREATED',
+  'PICKED_UP',
+  'IN_TRANSIT',
+  'OUT_FOR_DELIVERY',
+  'DELIVERED',
+];
 
 export function BookingLink({ compact = false }: { compact?: boolean }) {
   return (
     <Link
       href="/customer/book"
-      className={`${linkButton} bg-brand text-white hover:bg-brand-dark ${compact ? 'px-3 py-1.5' : ''}`}
+      className={buttonClasses({ variant: 'primary', size: compact ? 'md' : 'md' })}
     >
+      <PackagePlus className="h-4 w-4" aria-hidden="true" />
       Book a delivery
     </Link>
   );
 }
 
+export function DeliverySummaryTiles({ summary }: { summary: DeliverySummary }) {
+  const { total, delivered, failed } = summary;
+  const active =
+    total != null && delivered != null && failed != null ? total - delivered - failed : null;
+  const successRate =
+    delivered != null && failed != null && delivered + failed > 0
+      ? Math.round((delivered / (delivered + failed)) * 100)
+      : null;
+  return (
+    <StatGrid cols={4}>
+      <StatCard
+        label="Active"
+        value={formatNumber(active)}
+        icon={<Truck />}
+        tone="brand"
+        hint="On the way or awaiting pickup"
+        href="/customer"
+      />
+      <StatCard
+        label="Delivered"
+        value={formatNumber(delivered)}
+        icon={<CircleCheck />}
+        tone="success"
+        hint={successRate != null ? `${successRate}% success rate` : 'Completed deliveries'}
+        href="/customer?status=DELIVERED"
+      />
+      <StatCard
+        label="Failed"
+        value={formatNumber(failed)}
+        icon={<CircleX />}
+        tone="danger"
+        hint="Delivery attempts that failed"
+        href="/customer?status=FAILED"
+      />
+      <StatCard
+        label="Total"
+        value={formatNumber(total)}
+        icon={<Package />}
+        tone="neutral"
+        hint="All bookings on your account"
+      />
+    </StatGrid>
+  );
+}
+
+function statusHref(status?: ParcelStatus) {
+  return status ? `/customer?status=${status}` : '/customer';
+}
+
 export function DeliveriesDashboard({
   result,
   status,
+  summary,
 }: {
   result: DeliveryPage;
   status?: ParcelStatus;
+  summary?: DeliverySummary;
 }) {
   const { data: deliveries, meta } = result;
-  const totalPages = Math.max(1, Math.ceil(meta.total / meta.pageSize));
   const columns = [
     {
       header: 'Tracking number',
       cell: (delivery: Delivery) => (
         <Link
           href={`/customer/parcels/${delivery.id}`}
-          className="font-medium text-brand hover:text-brand-dark"
+          className="font-mono text-sm font-medium text-ink hover:text-brand"
         >
           {delivery.trackingNumber}
         </Link>
       ),
     },
     {
-      header: 'Recipient city',
-      cell: (delivery: Delivery) => delivery.dropoffCity,
+      header: 'Recipient',
+      cell: (delivery: Delivery) => (
+        <div className="min-w-0">
+          <p className="truncate text-ink">{delivery.recipientName}</p>
+          <p className="truncate text-xs text-muted capitalize">{delivery.dropoffCity}</p>
+        </div>
+      ),
     },
     {
       header: 'Status',
@@ -101,209 +164,336 @@ export function DeliveriesDashboard({
     {
       header: 'Fee',
       cell: (delivery: Delivery) => formatFee(delivery.feeCents, delivery.currency),
-      className: 'whitespace-nowrap px-4 py-3 font-medium',
+      className: 'whitespace-nowrap px-4 py-3 text-right font-medium tabular-nums',
+      headerClassName: 'text-right',
+    },
+    {
+      header: 'Details',
+      cell: (delivery: Delivery) => (
+        <Link
+          href={`/customer/parcels/${delivery.id}`}
+          className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:text-brand-hover"
+          aria-label={`View delivery ${delivery.trackingNumber}`}
+        >
+          View <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </Link>
+      ),
+      className: 'px-4 py-3 text-right',
+      headerClassName: 'text-right',
     },
   ];
 
-  return (
-    <div className="space-y-5">
-      <form className="flex flex-wrap items-end gap-3" method="get">
-        <label className="grid gap-1.5 text-sm font-medium" htmlFor="status">
-          Status
-          <select
-            id="status"
-            name="status"
-            defaultValue={status ?? ''}
-            className="min-w-48 rounded-md border border-line bg-surface px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-soft"
-          >
-            <option value="">All statuses</option>
-            {Object.entries(STATUS_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button type="submit" variant="secondary">
-          Apply filter
-        </Button>
-        {status && (
-          <Link href="/customer" className="px-2 py-2 text-sm font-medium text-brand">
-            Clear
-          </Link>
-        )}
-      </form>
+  const tabs = [
+    { value: 'ALL', label: 'All', href: statusHref() },
+    ...PARCEL_STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s], href: statusHref(s) })),
+  ];
 
-      <Table
-        columns={columns}
-        rows={deliveries}
-        rowKey={(delivery) => delivery.id}
-        empty={
-          <EmptyState
-            title={status ? 'No deliveries match this status' : 'No deliveries yet'}
+  return (
+    <div className="space-y-6">
+      {summary && <DeliverySummaryTiles summary={summary} />}
+
+      <div className="grid gap-6 xl:grid-cols-4">
+        <Card flush className="min-w-0 xl:col-span-3">
+          <CardHeader
+            title="Deliveries"
             description={
               status
-                ? 'Try another status or clear the filter.'
-                : 'Book your first delivery to receive a tracking number.'
+                ? `${formatNumber(meta.total)} ${STATUS_LABEL[status].toLowerCase()} deliveries`
+                : `${formatNumber(meta.total)} deliveries booked`
             }
-            action={
-              <div className="flex flex-wrap justify-center gap-3">
-                {status && (
-                  <Link
-                    href="/customer"
-                    className={`${linkButton} border border-line bg-surface text-ink hover:bg-canvas`}
-                  >
-                    Clear filter
-                  </Link>
-                )}
-                <BookingLink />
-              </div>
-            }
+            icon={<Package />}
           />
-        }
-      />
-
-      {meta.total > 0 && (
-        <nav
-          className="flex flex-wrap items-center justify-between gap-3 text-sm"
-          aria-label="Delivery pages"
-        >
-          <p className="text-muted">
-            Page {meta.page} of {totalPages}, {meta.total} deliveries
-          </p>
-          <div className="flex gap-2">
-            {meta.page > 1 ? (
-              <Link
-                href={pageHref(meta.page - 1, status)}
-                className={`${linkButton} border border-line bg-surface text-ink hover:bg-canvas`}
-              >
-                Previous
-              </Link>
-            ) : (
-              <span className={`${linkButton} cursor-not-allowed bg-canvas text-muted opacity-60`}>
-                Previous
-              </span>
-            )}
-            {meta.page < totalPages ? (
-              <Link
-                href={pageHref(meta.page + 1, status)}
-                className={`${linkButton} border border-line bg-surface text-ink hover:bg-canvas`}
-              >
-                Next
-              </Link>
-            ) : (
-              <span className={`${linkButton} cursor-not-allowed bg-canvas text-muted opacity-60`}>
-                Next
-              </span>
-            )}
+          <div className="border-b border-line px-5 py-3">
+            <Tabs items={tabs} value={status ?? 'ALL'} label="Filter by status" />
           </div>
-        </nav>
-      )}
+          {deliveries.length === 0 ? (
+            <div className="p-5">
+              <EmptyState
+                compact
+                className="border-0"
+                title={status ? 'No deliveries match this status' : 'No deliveries yet'}
+                description={
+                  status
+                    ? 'Try another status or clear the filter.'
+                    : 'Book your first delivery to receive a tracking number.'
+                }
+                action={
+                  <div className="flex flex-wrap justify-center gap-3">
+                    {status && (
+                      <Link href="/customer" className={buttonClasses({ variant: 'secondary' })}>
+                        Clear filter
+                      </Link>
+                    )}
+                    <BookingLink />
+                  </div>
+                }
+              />
+            </div>
+          ) : (
+            <Table
+              bare
+              columns={columns}
+              rows={deliveries}
+              rowKey={(delivery) => delivery.id}
+              caption="Your deliveries"
+            />
+          )}
+          {meta.total > 0 && (
+            <nav aria-label="Delivery pages" className="border-t border-line px-5 py-3">
+              <CustomerPagination
+                page={meta.page}
+                pageSize={meta.pageSize}
+                total={meta.total}
+                status={status}
+              />
+            </nav>
+          )}
+        </Card>
+
+        <div className="space-y-6">
+          <Card flush>
+            <CardHeader
+              title="Track a parcel"
+              description="Follow any SwiftDrop delivery live."
+              icon={<Search />}
+              titleAs="h2"
+            />
+            <CardBody className="space-y-3 text-sm text-muted">
+              <p>Have a tracking number from someone else? Look it up on the public tracker.</p>
+              <Link
+                href="/track"
+                className={buttonClasses({ variant: 'secondary', className: 'w-full' })}
+              >
+                Open tracker <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </CardBody>
+          </Card>
+          <Card flush className="overflow-hidden">
+            <div className="bg-sidebar p-5 text-sidebar-ink">
+              <PackagePlus className="h-6 w-6 text-logo-orange" aria-hidden="true" />
+              <p className="mt-3 font-semibold">Send something new</p>
+              <p className="mt-1 text-sm text-sidebar-muted">
+                Get an instant price and a tracking number in under a minute.
+              </p>
+              <Link
+                href="/customer/book"
+                className={buttonClasses({ variant: 'primary', className: 'mt-4 w-full' })}
+              >
+                Book a delivery
+              </Link>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RouteStop({
+  label,
+  name,
+  address,
+  city,
+  tone,
+}: {
+  label: string;
+  name: string;
+  address: string;
+  city: string;
+  tone: 'origin' | 'destination';
+}) {
+  return (
+    <div className="relative flex gap-3">
+      <span
+        className={
+          tone === 'origin'
+            ? 'mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand'
+            : 'mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-success-soft text-success'
+        }
+        aria-hidden="true"
+      >
+        <MapPin className="h-3.5 w-3.5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold tracking-wider text-muted uppercase">{label}</p>
+        <p className="mt-0.5 text-base font-semibold text-ink capitalize">{city}</p>
+        <p className="text-sm text-ink">{name}</p>
+        <p className="text-sm text-muted">{address}</p>
+      </div>
     </div>
   );
 }
 
 export function ParcelDetails({ parcel }: { parcel: CustomerParcel }) {
+  const status = parcel.status as ParcelStatus;
+  const reached =
+    status === 'FAILED'
+      ? Math.max(0, ...parcel.history.map((h) => PROGRESS_STEPS.indexOf(h.status as ParcelStatus)))
+      : PROGRESS_STEPS.indexOf(status);
+  const progress = ((Math.max(0, reached) + 1) / PROGRESS_STEPS.length) * 100;
+  const latest = parcel.history.length - 1;
+
   return (
     <div>
       <PageHeader
         title={parcel.trackingNumber}
         description={`${parcel.pickupCity} to ${parcel.dropoffCity}`}
+        meta={
+          <LiveParcelStatus
+            trackingNumber={parcel.trackingNumber}
+            status={status}
+            updatedAt={parcel.history[parcel.history.length - 1]?.at ?? parcel.createdAt}
+          />
+        }
+        breadcrumbs={[
+          { label: 'My deliveries', href: '/customer' },
+          { label: parcel.trackingNumber },
+        ]}
         actions={
-          <a
-            href={`/api/v1/parcels/${encodeURIComponent(parcel.id)}/receipt`}
-            aria-label={`Download receipt for ${parcel.trackingNumber}`}
-            className={`${linkButton} bg-brand text-white hover:bg-brand-dark`}
-          >
-            Download receipt
-          </a>
+          <>
+            <Link
+              href={`/track/${encodeURIComponent(parcel.trackingNumber)}`}
+              className={buttonClasses({ variant: 'secondary' })}
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+              Live tracking
+            </Link>
+            <a
+              href={`/api/v1/parcels/${encodeURIComponent(parcel.id)}/receipt`}
+              aria-label={`Download receipt for ${parcel.trackingNumber}`}
+              className={buttonClasses({ variant: 'primary' })}
+            >
+              <Receipt className="h-4 w-4" aria-hidden="true" />
+              Download receipt
+            </a>
+          </>
         }
       />
 
-      <Link href="/customer" className="mb-5 inline-block text-sm font-medium text-brand">
-        ← Back to my deliveries
-      </Link>
-
-      <div className="grid gap-5 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm text-muted">Current status</p>
-              <div className="mt-2">
-                <StatusBadge status={parcel.status} />
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
+          <Card flush>
+            <CardHeader
+              title="Route"
+              titleAs="h3"
+              description={
+                status === 'FAILED'
+                  ? 'Delivery failed — see the timeline for details.'
+                  : status === 'DELIVERED'
+                    ? 'This parcel has been delivered.'
+                    : `Step ${Math.max(0, reached) + 1} of ${PROGRESS_STEPS.length}`
+              }
+              icon={<Truck />}
+            />
+            <CardBody className="space-y-6">
+              <ProgressBar
+                value={progress}
+                tone={status === 'FAILED' ? 'danger' : status === 'DELIVERED' ? 'success' : 'brand'}
+                label="Delivery progress"
+              />
+              <div className="grid gap-6 sm:grid-cols-2">
+                <RouteStop
+                  label="Pickup"
+                  name={parcel.senderName}
+                  address={parcel.pickupAddress}
+                  city={parcel.pickupCity}
+                  tone="origin"
+                />
+                <RouteStop
+                  label="Drop-off"
+                  name={parcel.recipientName}
+                  address={parcel.dropoffAddress}
+                  city={parcel.dropoffCity}
+                  tone="destination"
+                />
               </div>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-muted">Delivery fee</p>
-              <p className="mt-1 text-lg font-semibold">
-                {formatFee(parcel.feeCents, parcel.currency)}
-              </p>
-            </div>
-          </div>
+            </CardBody>
+          </Card>
 
-          <dl className="mt-6 grid gap-5 border-t border-line pt-5 sm:grid-cols-2">
-            <Detail label="Sender">{parcel.senderName}</Detail>
-            <Detail label="Recipient">{parcel.recipientName}</Detail>
-            <Detail label="Pickup">
-              {parcel.pickupAddress}, {parcel.pickupCity}
-            </Detail>
-            <Detail label="Drop-off">
-              {parcel.dropoffAddress}, {parcel.dropoffCity}
-            </Detail>
-          </dl>
-        </Card>
+          <Card flush>
+            <CardHeader
+              title="Status timeline"
+              description="Status updates recorded for this delivery."
+            />
+            <CardBody>
+              {parcel.history.length > 0 ? (
+                <ol className="space-y-5">
+                  {parcel.history.map((entry, index) => {
+                    const isLatest = index === latest;
+                    return (
+                      <li key={`${entry.status}-${entry.at}`} className="relative flex gap-4">
+                        {index < latest && (
+                          <span
+                            className="absolute top-6 left-[11px] h-[calc(100%-0.25rem)] w-px bg-line"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span
+                          className={
+                            isLatest
+                              ? 'relative mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand text-brand-fg ring-4 ring-brand-soft'
+                              : 'relative mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-2 text-muted ring-1 ring-line-strong'
+                          }
+                          aria-hidden="true"
+                        >
+                          <CircleCheck className="h-3.5 w-3.5" />
+                        </span>
+                        <div className="min-w-0 pb-1">
+                          <p className="font-medium text-ink">
+                            {STATUS_LABEL[entry.status as ParcelStatus]}
+                          </p>
+                          <time className="text-sm text-muted" dateTime={entry.at}>
+                            {formatDateTime(entry.at)}
+                          </time>
+                          {entry.reason && (
+                            <p className="mt-1 text-sm text-danger">{entry.reason}</p>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : (
+                <p className="text-sm text-muted">No status updates are available yet.</p>
+              )}
+            </CardBody>
+          </Card>
 
-        <Card>
-          <h2 className="font-semibold">Parcel</h2>
-          <dl className="mt-4 space-y-4">
-            <Detail label="Size">{parcel.size.toLowerCase()}</Detail>
-            <Detail label="Weight">{parcel.weightKg} kg</Detail>
-            <Detail label="Booked">{formatDateTime(parcel.createdAt)}</Detail>
-            {parcel.deliveredAt && (
-              <Detail label="Delivered">{formatDateTime(parcel.deliveredAt)}</Detail>
-            )}
-          </dl>
-        </Card>
-      </div>
-
-      {parcel.status === 'DELIVERED' && (
-        <ProofOfDeliveryPhoto parcelId={parcel.id} trackingNumber={parcel.trackingNumber} />
-      )}
-
-      <Card className="mt-5">
-        <div>
-          <h2 className="font-semibold">Status timeline</h2>
-          <p className="mt-1 text-sm text-muted">Status updates recorded for this delivery.</p>
+          {parcel.status === 'DELIVERED' && (
+            <ProofOfDeliveryPhoto parcelId={parcel.id} trackingNumber={parcel.trackingNumber} />
+          )}
         </div>
 
-        {parcel.history.length > 0 ? (
-          <ol className="mt-6 space-y-5">
-            {parcel.history.map((entry, index) => (
-              <li key={`${entry.status}-${entry.at}`} className="relative flex gap-4">
-                {index < parcel.history.length - 1 && (
-                  <span
-                    className="absolute left-2 top-5 h-[calc(100%+0.25rem)] w-px bg-line"
-                    aria-hidden="true"
-                  />
-                )}
-                <span
-                  className="relative mt-1.5 h-4 w-4 shrink-0 rounded-full border-4 border-brand-soft bg-brand"
-                  aria-hidden="true"
-                />
-                <div className="min-w-0 pb-1">
-                  <p className="font-medium">{STATUS_LABEL[entry.status as ParcelStatus]}</p>
-                  <time className="text-sm text-muted" dateTime={entry.at}>
-                    {formatDateTime(entry.at)}
-                  </time>
-                  {entry.reason && <p className="mt-1 text-sm text-muted">{entry.reason}</p>}
-                </div>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="mt-5 text-sm text-muted">No status updates are available yet.</p>
-        )}
-      </Card>
+        <div className="space-y-6">
+          <Card flush>
+            <CardHeader title="Parcel" icon={<Package />} />
+            <CardBody>
+              <KeyValue
+                items={[
+                  {
+                    label: 'Size',
+                    value: <span className="capitalize">{parcel.size.toLowerCase()}</span>,
+                  },
+                  { label: 'Weight', value: `${parcel.weightKg} kg` },
+                  { label: 'Booked', value: formatDateTime(parcel.createdAt) },
+                  ...(parcel.deliveredAt
+                    ? [{ label: 'Delivered', value: formatDateTime(parcel.deliveredAt) }]
+                    : []),
+                ]}
+              />
+            </CardBody>
+          </Card>
+          <Card>
+            <p className="text-xs font-medium tracking-wide text-muted uppercase">Delivery fee</p>
+            <p className="mt-1 text-2xl font-semibold text-ink tabular-nums">
+              {formatFee(parcel.feeCents, parcel.currency)}
+            </p>
+            <p className="mt-1 text-xs text-muted">
+              Priced at booking. The receipt includes the full breakdown.
+            </p>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

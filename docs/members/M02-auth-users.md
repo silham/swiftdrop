@@ -18,7 +18,7 @@ team**.
 - `apps/api/src/common/auth/` (JwtAuthGuard, RolesGuard, decorators, TokenService); M1 built it and hands it over in Week 1
 - `apps/api/test/auth/`, `apps/api/test/auth-matrix/`
 - `packages/db/prisma/schema/auth.prisma`, `packages/db/seed/00-users.ts`
-- Web: `src/app/(public)/login/`, `src/app/(public)/register/`, `src/app/admin/users/`,
+- Web: `src/app/(auth)/login/`, `src/app/(auth)/register/`, `src/app/admin/users/`,
   `src/features/auth/`, `src/proxy.ts`, `src/lib/auth/`
 
 ## Do not edit (ask the owner)
@@ -195,3 +195,9 @@ To demonstrate live Google Sign-In during assessment:
   user to COURIER creates a `CourierProfile`; audit metadata carries no email.
 - The `JwtAuthGuard` status cache is per API process. Another instance can keep a stale role/status
   for up to 60 s (refresh sessions are still revoked at once on deactivation).
+- **Silent refresh (wired in):** `GET /api/v1/auth/resume?next=/path` rotates the session from the
+  refresh cookie (scoped to `/api/v1/auth`) and redirects back; only same-site page paths are accepted
+  as `next` (`safeNextPath`). `proxy.ts` sends a request with an expired access cookie there instead of
+  straight to `/login`. For client calls, `lib/api/client.ts` replays a 401 once after
+  `silentRefresh()` (and goes to `/login` if the refresh token is gone too). Tests:
+  `test/auth/session-resume.e2e-spec.ts`.

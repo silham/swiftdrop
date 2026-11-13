@@ -111,3 +111,13 @@ coordinates and must not become the bottleneck or build every shared component a
 - MinIO's image is no longer published, so object storage uses RustFS (ADR-0005).
 - Prisma blocks AI agents from `migrate reset`, so the integration-test setup truncates the
   `_test` database instead.
+
+- 2026-11-13, bonus items built:
+  - **AI assistant.** Tracking page chatbot over any OpenAI-compatible model (`modules/assistant`).
+  - **MCP server.** Role-aware tools (`modules/ai-tools`) at `/mcp`, protected by our own OAuth 2.1
+    server (`modules/oauth`, consent page `/oauth/authorize`); see ADR-0009.
+  - **Kubernetes.** Helm chart in `deploy/helm/swiftdrop` (`make k8s-lint`).
+  - **Hosting.** Coolify guide in `docs/deploy/`.
+  - Owners whose files were touched for exports only: M3 `bookings/index.ts`, M6 `courier/index.ts`,
+    M9 `reports/index.ts`. M2: the Google `next` cookie and `/oauth/:path*` in `proxy.ts`. M10:
+    Caddyfile routes, `compose.prod.yaml`, Makefile `k8s-*`.

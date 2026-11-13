@@ -10,3 +10,6 @@ apps/api/openapi.json
 playwright-report
 test-results
 apps/api/.openapi
+
+# Helm templates are Go templates, not plain YAML
+deploy/helm/*/templates/

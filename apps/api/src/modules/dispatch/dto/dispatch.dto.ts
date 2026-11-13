@@ -17,6 +17,8 @@ export class ListUnassignedQuery extends PaginationQuery {
   @ApiPropertyOptional() @IsOptional() @IsString() zoneId?: string;
 }
 
+export class ListAssignmentsQuery extends PaginationQuery {}
+
 export class CourierWorkloadDto {
   @ApiProperty() courierId: string;
   @ApiProperty() name: string;
@@ -60,4 +62,30 @@ export class UnassignedPageMetaDto {
 export class UnassignedParcelPageDto {
   @ApiProperty({ type: [UnassignedParcelDto] }) data: UnassignedParcelDto[];
   @ApiProperty({ type: UnassignedPageMetaDto }) meta: UnassignedPageMetaDto;
+}
+
+/** An ACTIVE assignment, as dispatch needs it to follow up or cancel. No recipient details. */
+export class ActiveAssignmentDto {
+  @ApiProperty() id: string;
+  @ApiProperty() parcelId: string;
+  @ApiProperty() trackingNumber: string;
+  @ApiProperty({ enum: PARCEL_STATUSES }) parcelStatus: ParcelStatus;
+  @ApiProperty() courierId: string;
+  @ApiProperty() courierName: string;
+  @ApiProperty() assignedAt: Date;
+  @ApiProperty({
+    description: 'false once the parcel is on the road (IN_TRANSIT, OUT_FOR_DELIVERY)',
+  })
+  canUnassign: boolean;
+}
+
+export class ActiveAssignmentPageMetaDto {
+  @ApiProperty() page: number;
+  @ApiProperty() pageSize: number;
+  @ApiProperty() total: number;
+}
+
+export class ActiveAssignmentPageDto {
+  @ApiProperty({ type: [ActiveAssignmentDto] }) data: ActiveAssignmentDto[];
+  @ApiProperty({ type: ActiveAssignmentPageMetaDto }) meta: ActiveAssignmentPageMetaDto;
 }

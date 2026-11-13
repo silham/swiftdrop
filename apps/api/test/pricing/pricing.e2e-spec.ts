@@ -146,5 +146,78 @@ describe('Pricing Module (Integration)', () => {
       });
       expect(audit).not.toBeNull();
     });
+
+    it('rejects a rule that ends before it starts (400) and writes nothing', async () => {
+      const before = await t.prisma.pricingRule.count();
+      const res = await request(t.http)
+        .post('/api/v1/admin/pricing-rules')
+        .set('Cookie', await t.cookieFor('ADMIN'))
+        .send({
+          name: 'Backwards Window Rule',
+          baseFeeCents: 1000,
+          perKgCents: 100,
+          isActive: false,
+          validFrom: '2031-02-01T00:00:00.000Z',
+          validTo: '2031-01-01T00:00:00.000Z',
+        })
+        .expect(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(await t.prisma.pricingRule.count()).toBe(before);
+    });
+
+    it('checks the stored dates when an update changes only one side', async () => {
+      const created = await request(t.http)
+        .post('/api/v1/admin/pricing-rules')
+        .set('Cookie', await t.cookieFor('ADMIN'))
+        .send({
+          name: 'Window Update Rule',
+          baseFeeCents: 1000,
+          perKgCents: 100,
+          isActive: false,
+          validFrom: '2031-03-01T00:00:00.000Z',
+          validTo: '2031-06-01T00:00:00.000Z',
+        })
+        .expect(201);
+      await request(t.http)
+        .patch(`/api/v1/admin/pricing-rules/${created.body.id}`)
+        .set('Cookie', await t.cookieFor('ADMIN'))
+        .send({ validTo: '2031-01-01T00:00:00.000Z' })
+        .expect(400);
+      await request(t.http)
+        .patch(`/api/v1/admin/pricing-rules/${created.body.id}`)
+        .set('Cookie', await t.cookieFor('ADMIN'))
+        .send({ validTo: '2031-09-01T00:00:00.000Z' })
+        .expect(200);
+    });
+
+    it('records the audit entry for an update, and only ADMIN/DISPATCHER may change rules', async () => {
+      const created = await request(t.http)
+        .post('/api/v1/admin/pricing-rules')
+        .set('Cookie', await t.cookieFor('DISPATCHER'))
+        .send({ name: 'Audited Update Rule', baseFeeCents: 1000, perKgCents: 100, isActive: false })
+        .expect(201);
+      await request(t.http)
+        .patch(`/api/v1/admin/pricing-rules/${created.body.id}`)
+        .set('Cookie', await t.cookieFor('ADMIN'))
+        .send({ name: 'Audited Update Rule v2' })
+        .expect(200);
+      expect(
+        await t.prisma.auditLog.findFirst({
+          where: { action: 'pricing_rule.updated', entityId: created.body.id },
+        }),
+      ).not.toBeNull();
+
+      await request(t.http)
+        .patch(`/api/v1/admin/pricing-rules/${created.body.id}`)
+        .send({ name: 'x' })
+        .expect(401);
+      for (const role of ['CUSTOMER', 'COURIER', 'MERCHANT'] as const) {
+        await request(t.http)
+          .patch(`/api/v1/admin/pricing-rules/${created.body.id}`)
+          .set('Cookie', await t.cookieFor(role))
+          .send({ name: 'x' })
+          .expect(403);
+      }
+    });
   });
 });

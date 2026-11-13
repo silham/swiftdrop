@@ -337,6 +337,15 @@ describe('merchants module — Tasks 1 & 2 (integration)', () => {
         expect(dbEp).toBeDefined();
         expect(dbEp?.secretEncrypted).not.toBe(rawSecret);
         expect(dbEp?.secretEncrypted.split(':')).toHaveLength(3);
+
+        // Audited: who, what, and only the host of the URL, never the secret.
+        const audit = await t.prisma.auditLog.findFirstOrThrow({
+          where: { action: 'webhook.created', entityId: createdEndpointId },
+        });
+        expect(audit.actorRole).toBe('MERCHANT');
+        expect(audit.metadata).toMatchObject({ host: 'webhook.site' });
+        expect(JSON.stringify(audit)).not.toContain(rawSecret);
+        expect(JSON.stringify(audit)).not.toContain('test-endpoint');
       });
 
       it('lists webhooks without exposing signing secrets', async () => {
@@ -364,6 +373,11 @@ describe('merchants module — Tasks 1 & 2 (integration)', () => {
 
         expect(res.body.url).toBe('https://webhook.site/updated-endpoint');
         expect(res.body.isActive).toBe(false);
+
+        const audit = await t.prisma.auditLog.findFirst({
+          where: { action: 'webhook.updated', entityId: createdEndpointId },
+        });
+        expect(audit?.metadata).toMatchObject({ host: 'webhook.site', isActive: false });
       });
 
       it('rotates signing secret, stores old secret in previousSecretEncrypted, and audits', async () => {
@@ -407,6 +421,45 @@ describe('merchants module — Tasks 1 & 2 (integration)', () => {
         expect(Array.isArray(res.body)).toBe(true);
         expect(res.body.length).toBeGreaterThanOrEqual(1);
         expect(res.body[0].status).toBe('SUCCEEDED');
+        expect(res.headers['x-total-count']).toBe('1');
+      });
+
+      it('pages through delivery attempts, newest first, with the total in X-Total-Count', async () => {
+        for (let n = 2; n <= 5; n++) {
+          await t.prisma.webhookAttempt.create({
+            data: {
+              endpointId: createdEndpointId,
+              eventId: `evt_page_${n}`,
+              attemptNumber: 1,
+              status: 'FAILED',
+              responseStatus: 500,
+              durationMs: 50,
+              // Later attempts have later timestamps
+              createdAt: new Date(Date.now() + n * 1000),
+            },
+          });
+        }
+        const url = `/api/v1/merchants/me/webhooks/${createdEndpointId}/attempts`;
+
+        const first = await request(t.http)
+          .get(`${url}?page=1&pageSize=2`)
+          .set('Cookie', merchantCookie)
+          .expect(200);
+        expect(first.body).toHaveLength(2);
+        expect(first.headers['x-total-count']).toBe('5');
+        expect(first.body.map((a: { eventId: string }) => a.eventId)).toEqual([
+          'evt_page_5',
+          'evt_page_4',
+        ]);
+
+        const last = await request(t.http)
+          .get(`${url}?page=3&pageSize=2`)
+          .set('Cookie', merchantCookie)
+          .expect(200);
+        expect(last.body).toHaveLength(1);
+        expect(last.headers['x-total-count']).toBe('5');
+
+        await request(t.http).get(`${url}?pageSize=0`).set('Cookie', merchantCookie).expect(400);
       });
 
       it('deletes the webhook endpoint', async () => {
@@ -419,6 +472,11 @@ describe('merchants module — Tasks 1 & 2 (integration)', () => {
           where: { id: createdEndpointId },
         });
         expect(dbEp).toBeNull();
+
+        const audit = await t.prisma.auditLog.findFirst({
+          where: { action: 'webhook.deleted', entityId: createdEndpointId },
+        });
+        expect(audit?.metadata).toMatchObject({ host: 'webhook.site' });
       });
     });
   });
